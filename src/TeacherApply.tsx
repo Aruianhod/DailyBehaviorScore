@@ -24,7 +24,7 @@ const TeacherApply: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) => {
     fetch('/api/admin/students')
       .then((res) => res.json())
       .then((data) => {
-        setStudents(data.students?.map((s: any) => ({ id: s.id, name: s.name })) || []);
+        setStudents(data.students?.map((s: any) => ({ id: s.student_id, name: s.name })) || []);
       });
   }, []);
 
@@ -73,23 +73,37 @@ const TeacherApply: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) => {
       setMessage('请添加至少一名学生，并填写分值与原因');
       return;
     }
-    const submitData: ApplicationForm = {
+    const currentUser = localStorage.getItem('currentUser') || 'teacher1';
+    const submitData: ApplicationForm & { teacher: string } = {
       students: form.students,
       delta: Number(form.delta),
       reason: form.reason,
       date: form.date,
+      teacher: currentUser,
     };
-    const res = await fetch('/api/teacher/apply', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(submitData),
-    });
-    const result = await res.json();
-    setMessage(result.message);
-    if (res.ok && onSuccess) {
-      setTimeout(() => {
-        onSuccess();
-      }, 1000);
+    
+    console.log('提交的数据:', submitData);
+    
+    try {
+      const res = await fetch('/api/teacher/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitData),
+      });
+      const result = await res.json();
+      
+      console.log('服务器响应:', result);
+      console.log('响应状态:', res.status);
+      
+      setMessage(result.message);
+      if (res.ok && onSuccess) {
+        setTimeout(() => {
+          onSuccess();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('提交申请时发生错误:', error);
+      setMessage('提交失败：网络错误');
     }
   };
 
@@ -101,7 +115,7 @@ const TeacherApply: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) => {
           <input name="studentId" list="student-ids" value={form.studentId} onChange={handleIdChange} style={{ width: 180, marginLeft: 8 }} />
           <datalist id="student-ids">
             {students.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+              <option key={`id-${s.id}`} value={s.id}>{s.name}</option>
             ))}
           </datalist>
         </label>
@@ -111,7 +125,7 @@ const TeacherApply: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) => {
           <input name="studentName" list="student-names" value={form.studentName} onChange={handleNameChange} style={{ width: 180, marginLeft: 8 }} />
           <datalist id="student-names">
             {students.map((s) => (
-              <option key={s.id} value={s.name}>{s.id}</option>
+              <option key={`name-${s.id}`} value={s.name}>{s.id}</option>
             ))}
           </datalist>
         </label>
@@ -121,7 +135,7 @@ const TeacherApply: React.FC<{ onSuccess?: () => void }> = ({ onSuccess }) => {
         <div>本次申请学生列表：</div>
         <ul style={{ paddingLeft: 20 }}>
           {form.students.map((s) => (
-            <li key={s.id}>
+            <li key={`selected-${s.id}`}>
               {s.id} - {s.name} <button type="button" onClick={() => handleRemoveStudent(s.id)} style={{ color: 'red', marginLeft: 8 }}>移除</button>
             </li>
           ))}

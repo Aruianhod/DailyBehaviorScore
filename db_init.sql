@@ -7,7 +7,8 @@ CREATE TABLE users (
   username VARCHAR(32) NOT NULL UNIQUE,
   password VARCHAR(64) NOT NULL,
   user_type ENUM('admin','teacher','student') NOT NULL,
-  name VARCHAR(255)
+  name VARCHAR(255),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE students (

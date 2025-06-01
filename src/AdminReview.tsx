@@ -50,6 +50,39 @@ const AdminReview: React.FC = () => {
     }
   };
 
+  // 单个申请通过
+  const handleSingleApprove = async (id: number) => {
+    setMessage('');
+    try {
+      const response = await fetch(`/api/admin/applications/${id}/approve`, { method: 'POST' });
+      const result = await response.json();
+      setMessage(result.message || '申请已通过');
+      fetchApplications();
+    } catch (error) {
+      setMessage('操作失败，请重试');
+    }
+  };
+
+  // 单个申请驳回
+  const handleSingleReject = async (id: number, reason: string) => {
+    if (!reason) { setMessage('请填写驳回理由'); return; }
+    setMessage('');
+    try {
+      const response = await fetch(`/api/admin/applications/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+      });
+      const result = await response.json();
+      setMessage(result.message || '申请已驳回');
+      setRejectingIds([]);
+      setRejectReason('');
+      fetchApplications();
+    } catch (error) {
+      setMessage('操作失败，请重试');
+    }
+  };
+
   // 批量通过
   const handleBatchApprove = async () => {
     setMessage('');
@@ -77,9 +110,12 @@ const AdminReview: React.FC = () => {
     setSelectAll(false);
     setRejectReason('');
     fetchApplications();
-  };  return (
-    <div style={{ width: '100%', minHeight: '100vh', background: '#f7f7f7', padding: '20px 40px', display: 'flex', justifyContent: 'center' }}>
-      <div style={{ maxWidth: 1440, width: '100%', background: '#fff', borderRadius: 12, boxShadow: '0 2px 12px rgba(0, 0, 0, 0.1)', padding: '40px', margin: '0 auto', boxSizing: 'border-box' }}><h2 style={{ textAlign: 'center', fontWeight: 700, fontSize: 28, marginBottom: 36, letterSpacing: 2, color: '#1a237e' }}>待审核分值申请</h2>
+  };
+
+  return (
+    <div style={{ width: '100%', minHeight: '100vh', background: '#f7f7f7', padding: '32px 0', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ maxWidth: 1500, width: '100%', background: '#fff', borderRadius: 8, boxShadow: '0 2px 12px #e0e0e0', padding: '48px 56px', margin: '0 auto', boxSizing: 'border-box' }}>
+        <h2 style={{ textAlign: 'left', fontWeight: 700, fontSize: 28, marginBottom: 36, letterSpacing: 2, color: '#1a237e' }}>待审核分值申请</h2>
         <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', padding: '16px 24px', background: '#fafafa', borderRadius: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <input 
@@ -88,18 +124,18 @@ const AdminReview: React.FC = () => {
               onChange={handleSelectAll}
               style={{ width: 18, height: 18 }}
             />
-            <span style={{ fontWeight: 600, fontSize: 15, color: '#444' }}>全选</span>
+            <span style={{ fontWeight: 600, fontSize: 16, color: '#444' }}>全选</span>
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
             <button 
               style={{ 
                 color: '#1976d2', 
                 background: selectedIds.length ? '#e3f2fd' : '#f5f5f5', 
                 border: 'none', 
                 borderRadius: 6, 
-                padding: '8px 24px', 
+                padding: '12px 32px', 
                 fontWeight: 600, 
-                fontSize: 15, 
+                fontSize: 17, 
                 cursor: selectedIds.length ? 'pointer' : 'not-allowed',
                 transition: 'all 0.2s',
                 boxShadow: selectedIds.length ? '0 2px 6px rgba(25, 118, 210, 0.2)' : 'none'
@@ -115,9 +151,9 @@ const AdminReview: React.FC = () => {
                 background: selectedIds.length ? '#ffebee' : '#f5f5f5', 
                 border: 'none', 
                 borderRadius: 6, 
-                padding: '8px 24px', 
+                padding: '12px 32px', 
                 fontWeight: 600, 
-                fontSize: 15, 
+                fontSize: 17, 
                 cursor: selectedIds.length ? 'pointer' : 'not-allowed',
                 transition: 'all 0.2s',
                 boxShadow: selectedIds.length ? '0 2px 6px rgba(211, 47, 47, 0.2)' : 'none'
@@ -129,19 +165,21 @@ const AdminReview: React.FC = () => {
             </button>
           </div>
           {rejectingIds.length > 0 && (
-            <span style={{ marginLeft: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ marginLeft: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
               <input
                 placeholder="驳回理由"
                 value={rejectReason}
                 onChange={e => setRejectReason(e.target.value)}
-                style={{ width: 180, height: 32, fontSize: 15, borderRadius: 4, border: '1px solid #ccc', padding: '0 8px' }}
+                style={{ width: 220, height: 36, fontSize: 16, borderRadius: 4, border: '1px solid #ccc', padding: '0 10px' }}
               />
-              <button style={{ background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 16px', fontWeight: 600 }} onClick={handleBatchReject}>确认</button>
-              <button style={{ background: '#eee', color: '#333', border: 'none', borderRadius: 4, padding: '6px 16px', fontWeight: 600 }} onClick={() => { setRejectingIds([]); setRejectReason(''); }}>取消</button>
+              <button style={{ background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, padding: '8px 24px', fontWeight: 600, fontSize: 16 }} onClick={handleBatchReject}>确认</button>
+              <button style={{ background: '#eee', color: '#333', border: 'none', borderRadius: 4, padding: '8px 24px', fontWeight: 600, fontSize: 16 }} onClick={() => { setRejectingIds([]); setRejectReason(''); }}>取消</button>
             </span>
           )}
-        </div>        {loading ? <div style={{ textAlign: 'center', fontSize: 18, color: '#888', margin: '60px 0' }}>加载中...</div> : (
-          <div style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden', margin: '0 -40px', padding: '0 40px' }}>            <table style={{ 
+        </div>
+        {loading ? <div style={{ textAlign: 'center', fontSize: 18, color: '#888', margin: '60px 0' }}>加载中...</div> : (
+          <div style={{ width: '100%', overflowX: 'auto', overflowY: 'hidden', margin: '0 -40px', padding: '0 40px' }}>
+            <table style={{ 
                 minWidth: '100%', 
                 width: '100%', 
                 borderCollapse: 'separate', 
@@ -265,7 +303,7 @@ const AdminReview: React.FC = () => {
                           }} 
                           onMouseEnter={e => e.currentTarget.style.backgroundColor = '#bbdefb'}
                           onMouseLeave={e => e.currentTarget.style.backgroundColor = '#e3f2fd'}
-                          onClick={() => { setSelectedIds([app.id]); handleBatchApprove(); }}
+                          onClick={() => handleSingleApprove(app.id)}
                         >
                           通过
                         </button>
@@ -331,7 +369,7 @@ const AdminReview: React.FC = () => {
                             }}
                             onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1565c0'}
                             onMouseLeave={e => e.currentTarget.style.backgroundColor = '#1976d2'}
-                            onClick={handleBatchReject}
+                            onClick={() => handleSingleReject(app.id, rejectReason)}
                           >
                             确认
                           </button>

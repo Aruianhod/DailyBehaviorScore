@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>老师账号管理功能测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-success {
+            background-color: #28a745;
+            color: white;
+        }
+        input {
+            margin: 5px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #results {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>老师账号管理功能测试</h1>
+    
+    <div class="test-section">
+        <h3>测试步骤：</h3>
+        <ol>
+            <li>在主界面使用管理员账号登录（admin/123456）</li>
+            <li>点击"老师账号管理"菜单</li>
+            <li>测试创建新老师账号功能</li>
+            <li>验证老师列表显示</li>
+            <li>测试删除老师账号功能</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h3>API接口测试：</h3>
+        <button class="btn-primary" onclick="testGetTeachers()">获取老师列表</button>
+        <button class="btn-success" onclick="testCreateTeacher()">创建测试老师</button>
+        <br><br>
+        
+        <div>
+            <label>用户名：</label>
+            <input type="text" id="username" placeholder="输入测试用户名" value="test_user_frontend">
+            <label>姓名：</label>
+            <input type="text" id="name" placeholder="输入测试姓名" value="前端测试老师">
+            <button class="btn-success" onclick="createCustomTeacher()">创建自定义老师</button>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>测试结果：</h3>
+        <div id="results">点击上方按钮开始测试...</div>
+    </div>
+
+    <script>
+        const baseURL = 'http://localhost:3000';
+        const resultsDiv = document.getElementById('results');
+
+        function log(message) {
+            resultsDiv.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        async function testGetTeachers() {
+            try {
+                log('正在获取老师列表...');
+                const response = await fetch(`${baseURL}/api/teachers`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ 获取成功，共 ${data.length} 位老师：`);
+                    data.forEach(teacher => {
+                        log(`  - ID: ${teacher.id}, 用户名: ${teacher.username}, 姓名: ${teacher.name}`);
+                    });
+                } else {
+                    log(`❌ 获取失败: ${data.message}`);
+                }
+            } catch (error) {
+                log(`❌ 网络错误: ${error.message}`);
+            }
+        }
+
+        async function testCreateTeacher() {
+            const username = 'test_' + Date.now();
+            const name = '测试老师_' + Date.now();
+            
+            try {
+                log(`正在创建老师账号 (${username}, ${name})...`);
+                const response = await fetch(`${baseURL}/api/teachers`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        name: name,
+                        password: '123456'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ 创建成功: ${data.message}, ID: ${data.id}`);
+                    // 自动刷新列表
+                    setTimeout(testGetTeachers, 1000);
+                } else {
+                    log(`❌ 创建失败: ${data.message}`);
+                }
+            } catch (error) {
+                log(`❌ 网络错误: ${error.message}`);
+            }
+        }
+
+        async function createCustomTeacher() {
+            const username = document.getElementById('username').value;
+            const name = document.getElementById('name').value;
+            
+            if (!username || !name) {
+                log('❌ 请输入用户名和姓名');
+                return;
+            }
+            
+            try {
+                log(`正在创建老师账号 (${username}, ${name})...`);
+                const response = await fetch(`${baseURL}/api/teachers`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        name: name,
+                        password: '123456'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`✅ 创建成功: ${data.message}, ID: ${data.id}`);
+                    // 清空输入框
+                    document.getElementById('username').value = '';
+                    document.getElementById('name').value = '';
+                    // 自动刷新列表
+                    setTimeout(testGetTeachers, 1000);
+                } else {
+                    log(`❌ 创建失败: ${data.message}`);
+                }
+            } catch (error) {
+                log(`❌ 网络错误: ${error.message}`);
+            }
+        }
+
+        // 页面加载时自动获取一次老师列表
+        window.onload = function() {
+            testGetTeachers();
+        };
+    </script>
+</body>
+</html>
