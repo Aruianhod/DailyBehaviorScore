@@ -16,73 +16,100 @@ interface ScoreRecord {
   delta: number;
   reason: string;
   date: string;
+  created_at?: string;
   status: string;
   reviewer?: string;
+  operator?: string;
 }
 
 const TeacherViewStudents: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
-  const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<string[]>([]);
   const [grades, setGrades] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedGrade, setSelectedGrade] = useState<string>('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [scoreRecords, setScoreRecords] = useState<ScoreRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  // 获取所有学生数据
+
+  // 获取年级选项
   useEffect(() => {
-    setLoading(true);
-    fetch('/api/admin/students')
+    fetch('/api/admin/class-options')
       .then(res => res.json())
       .then(data => {
-        const studentData = data.students || [];
-        setAllStudents(studentData);
-        setStudents(studentData);
-        
-        // 提取所有班级
-        const uniqueClasses = [...new Set(studentData.map((s: Student) => s.class))] as string[];
-        setClasses(uniqueClasses);
-        
-        // 提取所有年级
-        const uniqueGrades = [...new Set(studentData.map((s: Student) => s.grade?.toString()))] as string[];
-        setGrades(uniqueGrades.sort());
-        
-        setLoading(false);
+        setGrades(data.grades || []);
       })
       .catch(err => {
-        console.error('获取学生数据失败:', err);
-        setLoading(false);
+        console.error('获取年级数据失败:', err);
+        setGrades(['2021', '2022', '2023', '2024']);
       });
   }, []);
-  // 根据选择的年级和班级过滤学生
+
+  // 当年级改变时，获取对应的班级选项
   useEffect(() => {
-    let filteredStudents = allStudents;
-    
     if (selectedGrade) {
-      filteredStudents = filteredStudents.filter(s => s.grade?.toString() === selectedGrade);
-    }
-    
-    if (selectedClass) {
-      filteredStudents = filteredStudents.filter(s => s.class === selectedClass);
-    }
-    
-    setStudents(filteredStudents);
-    
-    // 更新可用班级列表（基于当前选择的年级）
-    if (selectedGrade) {
-      const classesForGrade = [...new Set(
-        allStudents
-          .filter(s => s.grade?.toString() === selectedGrade)
-          .map(s => s.class)
-      )];
-      setClasses(classesForGrade);
+      fetch(`/api/admin/class-options?grade=${selectedGrade}`)
+        .then(res => res.json())
+        .then(data => {
+          setClasses(data.classes || []);
+          setSelectedClass(''); // 重置班级选择
+        })
+        .catch(err => {
+          console.error('获取班级数据失败:', err);
+          setClasses([]);
+        });
     } else {
-      const allClasses = [...new Set(allStudents.map(s => s.class))];
-      setClasses(allClasses);
+      // 如果没有选择年级，获取所有班级
+      fetch('/api/admin/class-options')
+        .then(res => res.json())
+        .then(data => {
+          setClasses(data.classes || []);
+        })
+        .catch(err => {
+          console.error('获取班级数据失败:', err);
+         //setClasses(['1班', '2班', '3班', '4班', '5班']);
+        });
     }
-  }, [selectedGrade, selectedClass, allStudents]);
+  }, [selectedGrade]);  // 自动加载学生数据 - 只有在有筛选条件时才加载
+  useEffect(() => {
+    if (selectedGrade || selectedClass) {
+      loadStudents();
+    } else {
+      // 如果没有筛选条件，清空数据
+      setStudents([]);
+    }
+  }, [selectedGrade, selectedClass]);
+
+  // 加载学生数据
+  const loadStudents = async () => {
+    setLoading(true);
+    try {
+      let url = '/api/admin/students';
+      const params = new URLSearchParams();
+      
+      if (selectedGrade) {
+        params.append('grade', selectedGrade);
+      }
+      if (selectedClass) {
+        params.append('class', selectedClass);
+      }
+      
+      if (params.toString()) {
+        url += '?' + params.toString();
+      }
+
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      const studentData = data.students || [];
+      setStudents(studentData);
+    } catch (err) {
+      console.error('获取学生数据失败:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
   // 获取学生的分值变更记录
   const fetchStudentRecords = async (studentId: string) => {
     try {
@@ -191,8 +218,7 @@ const TeacherViewStudents: React.FC = () => {
             }}>
               学生信息查看
             </h2>
-              <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <select 
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>              <select 
                 value={selectedGrade} 
                 onChange={(e) => {
                   setSelectedGrade(e.target.value);
@@ -214,7 +240,9 @@ const TeacherViewStudents: React.FC = () => {
               
               <select 
                 value={selectedClass} 
-                onChange={(e) => setSelectedClass(e.target.value)}
+                onChange={(e) => {
+                  setSelectedClass(e.target.value);
+                }}
                 style={{ 
                   padding: '8px 12px', 
                   borderRadius: 6, 
@@ -227,9 +255,7 @@ const TeacherViewStudents: React.FC = () => {
                 {classes.map(cls => (
                   <option key={cls} value={cls}>{cls}</option>
                 ))}
-              </select>
-              
-              <button 
+              </select>              <button 
                 onClick={exportToExcel}
                 disabled={!selectedClass || exporting}
                 style={{ 
@@ -281,8 +307,8 @@ const TeacherViewStudents: React.FC = () => {
                     <th style={{ fontSize: 15, fontWeight: 600, color: '#1976d2', padding: '12px 8px', width: '13%' }}>当前分值</th>
                     <th style={{ fontSize: 15, fontWeight: 600, color: '#1976d2', padding: '12px 8px', width: '35%' }}>操作</th>
                   </tr>
-                </thead>
-                <tbody>                  {students.length === 0 && (
+                </thead>                <tbody>
+                  {students.length === 0 && !loading ? (
                     <tr>
                       <td colSpan={6} style={{ 
                         textAlign: 'center', 
@@ -290,10 +316,10 @@ const TeacherViewStudents: React.FC = () => {
                         color: '#bbb', 
                         fontSize: 16 
                       }}>
-                        {selectedClass ? `${selectedClass}班暂无学生数据` : '暂无学生数据'}
+                        {selectedGrade || selectedClass ? '未找到符合条件的学生数据' : '请选择筛选条件查看学生信息'}
                       </td>
                     </tr>
-                  )}                  {students.map(student => (
+                  ) : null}{students.map(student => (
                     <tr 
                       key={student.student_id} 
                       style={{ 
@@ -471,7 +497,10 @@ const TeacherViewStudents: React.FC = () => {
                       }}>
                         {record.reason}
                       </td>                      <td style={{ fontSize: 13, color: '#666', padding: '8px' }}>
-                        {(record.date || record.created_at) ? new Date(record.date || record.created_at).toLocaleDateString('zh-CN') : '-'}
+                        {(() => {
+                          const dateValue = record.date || record.created_at;
+                          return dateValue ? new Date(dateValue).toLocaleDateString('zh-CN') : '-';
+                        })()}
                       </td>
                       <td style={{ 
                         fontSize: 13, 

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>按需加载功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1976d2;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        select, button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        button {
+            background: #4caf50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .status.loading {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .status.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .results {
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px 8px;
+            text-align: left;
+        }
+        th {
+            background: #f8faff;
+            color: #1976d2;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+        .empty {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 学生信息按需加载功能测试</h1>
+        
+        <div class="controls">
+            <label>年级：</label>
+            <select id="gradeSelect">
+                <option value="">所有年级</option>
+            </select>
+            
+            <label>班级：</label>
+            <select id="classSelect">
+                <option value="">所有班级</option>
+            </select>
+            
+            <button id="loadBtn">加载数据</button>
+            <button id="clearBtn">清空数据</button>
+        </div>
+        
+        <div id="status"></div>
+        
+        <div class="results">
+            <div id="summary"></div>
+            <div id="studentTable"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        
+        let students = [];
+        let grades = [];
+        let classes = [];
+
+        const gradeSelect = document.getElementById('gradeSelect');
+        const classSelect = document.getElementById('classSelect');
+        const loadBtn = document.getElementById('loadBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusDiv = document.getElementById('status');
+        const summaryDiv = document.getElementById('summary');
+        const tableDiv = document.getElementById('studentTable');
+
+        // 显示状态
+        function showStatus(message, type = 'loading') {
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        // 隐藏状态
+        function hideStatus() {
+            statusDiv.innerHTML = '';
+            statusDiv.className = '';
+        }
+
+        // 加载年级班级选项
+        async function loadOptions() {
+            try {
+                showStatus('🔄 加载筛选选项中...', 'loading');
+                const response = await fetch(`${API_BASE}/api/admin/class-options`);
+                const data = await response.json();
+                
+                grades = data.grades || [];
+                classes = data.classes || [];
+                
+                // 填充年级选项
+                gradeSelect.innerHTML = '<option value="">所有年级</option>';
+                grades.forEach(grade => {
+                    const option = document.createElement('option');
+                    option.value = grade;
+                    option.textContent = `${grade}级`;
+                    gradeSelect.appendChild(option);
+                });
+                
+                // 填充班级选项
+                classSelect.innerHTML = '<option value="">所有班级</option>';
+                classes.forEach(cls => {
+                    const option = document.createElement('option');
+                    option.value = cls;
+                    option.textContent = cls;
+                    classSelect.appendChild(option);
+                });
+                
+                hideStatus();
+                console.log('✅ 选项加载完成:', { grades: grades.length, classes: classes.length });
+                
+            } catch (error) {
+                showStatus(`❌ 加载选项失败: ${error.message}`, 'error');
+                console.error('加载选项失败:', error);
+            }
+        }
+
+        // 加载学生数据
+        async function loadStudents() {
+            try {
+                const grade = gradeSelect.value;
+                const cls = classSelect.value;
+                
+                let url = `${API_BASE}/api/admin/students`;
+                const params = new URLSearchParams();
+                
+                if (grade) params.append('grade', grade);
+                if (cls) params.append('class', cls);
+                
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                loadBtn.disabled = true;
+                showStatus('🔄 加载学生数据中...', 'loading');
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                students = data.students || [];
+                
+                showStatus(`✅ 成功加载 ${students.length} 名学生`, 'success');
+                renderSummary();
+                renderTable();
+                
+            } catch (error) {
+                showStatus(`❌ 加载学生数据失败: ${error.message}`, 'error');
+                console.error('加载学生数据失败:', error);
+            } finally {
+                loadBtn.disabled = false;
+            }
+        }
+
+        // 渲染摘要信息
+        function renderSummary() {
+            const grade = gradeSelect.value;
+            const cls = classSelect.value;
+            
+            let filterText = '';
+            if (grade && cls) {
+                filterText = `${grade}级 ${cls}`;
+            } else if (grade) {
+                filterText = `${grade}级`;
+            } else if (cls) {
+                filterText = cls;
+            } else {
+                filterText = '全部';
+            }
+            
+            summaryDiv.innerHTML = `
+                <h3>📋 数据摘要</h3>
+                <p><strong>筛选条件:</strong> ${filterText}</p>
+                <p><strong>学生数量:</strong> ${students.length} 名</p>
+            `;
+        }
+
+        // 渲染学生表格
+        function renderTable() {
+            if (students.length === 0) {
+                tableDiv.innerHTML = '<div class="empty">📭 未找到符合条件的学生数据</div>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>学号</th>
+                            <th>姓名</th>
+                            <th>年级</th>
+                            <th>班级</th>
+                            <th>当前分值</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            students.slice(0, 20).forEach(student => { // 只显示前20条
+                html += `
+                    <tr>
+                        <td>${student.student_id}</td>
+                        <td>${student.name}</td>
+                        <td>${student.grade}</td>
+                        <td>${student.class}</td>
+                        <td>${student.score}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            
+            if (students.length > 20) {
+                html += `<p style="text-align: center; color: #666; margin-top: 15px;">
+                    显示前20条，共${students.length}条记录
+                </p>`;
+            }
+            
+            tableDiv.innerHTML = html;
+        }
+
+        // 清空数据
+        function clearData() {
+            students = [];
+            summaryDiv.innerHTML = '';
+            tableDiv.innerHTML = '<div class="empty">🔍 请选择筛选条件并点击"加载数据"按钮</div>';
+            hideStatus();
+        }
+
+        // 事件监听
+        loadBtn.addEventListener('click', loadStudents);
+        clearBtn.addEventListener('click', clearData);
+
+        // 初始化
+        async function init() {
+            await loadOptions();
+            clearData();
+        }
+
+        init();
+    </script>
+</body>
+</html>

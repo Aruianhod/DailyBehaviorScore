@@ -97,11 +97,65 @@ app.post('/api/admin/import-excel', upload.single('file'), (req, res) => {
   }
 });
 
-// 学生列表
+// 学生列表（支持筛选）
 app.get('/api/admin/students', (req, res) => {
-  db.query('SELECT student_id, name, grade, class, score FROM students', (err, results) => {
+  const { grade, class: className } = req.query;
+  let query = 'SELECT student_id, name, grade, class, score FROM students';
+  let params = [];
+  let whereConditions = [];
+
+  if (grade) {
+    whereConditions.push('grade = ?');
+    params.push(grade);
+  }
+  
+  if (className) {
+    whereConditions.push('class = ?');
+    params.push(className);
+  }
+
+  if (whereConditions.length > 0) {
+    query += ' WHERE ' + whereConditions.join(' AND ');
+  }
+
+  query += ' ORDER BY grade, class, student_id';
+
+  db.query(query, params, (err, results) => {
     if (err) return res.status(500).json({ message: '数据库错误' });
     res.json({ students: results });
+  });
+});
+
+// 获取年级班级选项
+app.get('/api/admin/class-options', (req, res) => {
+  const { grade } = req.query;
+  
+  const gradeQuery = 'SELECT DISTINCT grade FROM students WHERE grade IS NOT NULL AND grade != "" ORDER BY grade';
+  
+  db.query(gradeQuery, (err1, gradeResults) => {
+    if (err1) return res.status(500).json({ message: '获取年级数据失败' });
+    
+    let classQuery = 'SELECT DISTINCT class FROM students WHERE class IS NOT NULL AND class != ""';
+    let classParams = [];
+    
+    // 如果指定了年级，筛选对应的班级（班级前两位对应年级后两位）
+    if (grade) {
+      const gradeStr = grade.toString();
+      const gradeLastTwo = gradeStr.slice(-2); // 获取年级的后两位
+      classQuery += ' AND class LIKE ?';
+      classParams.push(`${gradeLastTwo}%`);
+    }
+    
+    classQuery += ' ORDER BY class';
+    
+    db.query(classQuery, classParams, (err2, classResults) => {
+      if (err2) return res.status(500).json({ message: '获取班级数据失败' });
+      
+      const grades = gradeResults.map(row => row.grade);
+      const classes = classResults.map(row => row.class);
+      
+      res.json({ grades, classes });
+    });
   });
 });
 

@@ -15,6 +15,8 @@ interface ScoreRecord {
   reason: string;
   reviewer: string;  // 后端返回的是 reviewer 字段
   date: string;      // 后端返回的是 date 字段
+  created_at?: string; // 可选的创建时间字段
+  operator?: string;   // 可选的操作人字段
 }
 
 const StudentScore: React.FC = () => {
