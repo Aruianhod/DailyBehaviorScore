@@ -1,4 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import AlertDialog from './components/AlertDialog';
+import ConfirmDialog from './components/ConfirmDialog';
+import InputDialog from './components/InputDialog';
+import { useDialog } from './hooks/useDialog';
 
 interface Student {
   id: string;
@@ -25,6 +29,10 @@ const StudentTable: React.FC = () => {
   const [recordPage, setRecordPage] = useState(1);
   const recordPageSize = 10;
   const [loading, setLoading] = useState(false);
+  const [showBatchEditDialog, setShowBatchEditDialog] = useState(false);
+  
+  // 使用自定义弹窗
+  const { showAlert, alertState, closeAlert, showConfirm, confirmState, closeConfirm } = useDialog();
 
   // 获取筛选选项
   const [gradeOptions, setGradeOptions] = useState<string[]>([]);
@@ -172,29 +180,59 @@ const StudentTable: React.FC = () => {
   };
   const handleBatchDelete = async () => {
     if (!selectedIds.length) return;
-    if (!window.confirm('确定要删除选中的学生吗？')) return;
-    const res = await fetch('/api/admin/students', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: selectedIds })
-    });
-    const result = await res.json();
-    setSelectedIds([]);
-    fetchStudents(); // 重新加载数据
-    alert(result.message);
+    
+    const confirmed = await showConfirm(
+      '确定要删除选中的学生吗？',
+      '此操作不可撤销，请谨慎操作。',
+      'danger'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      const res = await fetch('/api/admin/students', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      const result = await res.json();
+      setSelectedIds([]);
+      fetchStudents(); // 重新加载数据
+      
+      if (res.ok) {
+        showAlert('删除成功: ' + result.message, '删除成功', 'success');
+      } else {
+        showAlert('删除失败: ' + result.message, '删除失败', 'error');
+      }
+    } catch (error) {
+      showAlert('网络错误，请稍后重试', '删除失败', 'error');
+    }
   };
   const handleBatchEdit = async (delta: number, reason: string) => {
     if (!selectedIds.length) return;
-    if (!reason.trim() || isNaN(delta)) { alert('请填写原因和分值'); return; }
-    const res = await fetch('/api/admin/score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_id: selectedIds, delta, reason, operator: 'admin' })
-    });
-    const result = await res.json();
-    setSelectedIds([]);
-    fetchStudents(); // 重新加载数据
-    alert(result.message);
+    if (!reason.trim() || isNaN(delta)) { 
+      showAlert('请填写原因和分值', '参数错误', 'warning'); 
+      return; 
+    }
+    
+    try {
+      const res = await fetch('/api/admin/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: selectedIds, delta, reason, operator: 'admin' })
+      });
+      const result = await res.json();
+      setSelectedIds([]);
+      fetchStudents(); // 重新加载数据
+      
+      if (res.ok) {
+        showAlert('批量修改成功: ' + result.message, '批量修改成功', 'success');
+      } else {
+        showAlert('批量修改失败: ' + result.message, '批量修改失败', 'error');
+      }
+    } catch (error) {
+      showAlert('网络错误，请稍后重试', '批量修改失败', 'error');
+    }
   };
 
   const totalPages = Math.ceil(searchedStudents.length / pageSize);
@@ -248,12 +286,7 @@ const StudentTable: React.FC = () => {
             批量删除
           </button>
           <button
-            onClick={() => {
-              const input = prompt('请输入批量修改的分值变动（正负均可）');
-              const delta = input !== null ? Number(input) : NaN;
-              const reason = prompt('请输入批量修改的原因');
-              if (!isNaN(delta) && reason) handleBatchEdit(delta, reason);
-            }}
+            onClick={() => setShowBatchEditDialog(true)}
             disabled={selectedIds.length === 0}
             style={{ minWidth: 140, fontSize: 15, padding: '10px 0' }}>
             批量修改分值
@@ -537,6 +570,35 @@ const StudentTable: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {/* 对话框组件 */}
+      <AlertDialog
+        isOpen={alertState.isOpen}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        onClose={closeAlert}
+      />
+      
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        type={confirmState.type}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={() => closeConfirm(true)}
+        onCancel={() => closeConfirm(false)}
+      />
+      
+      <InputDialog
+        isOpen={showBatchEditDialog}
+        title="批量修改分值"
+        onClose={() => setShowBatchEditDialog(false)}
+        onConfirm={handleBatchEdit}
+        deltaLabel="分值变动"
+        reasonLabel="修改原因"
+        deltaPlaceholder="请输入分值变动（正负均可）"
+        reasonPlaceholder="请输入修改原因"
+      />
     </div>
   );
 };

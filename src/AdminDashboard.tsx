@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import StudentTable from './StudentTable';
 import AdminReview from './AdminReview';
 import TeacherManagement from './TeacherManagement';
+import ArchiveManagement from './ArchiveManagement';
+import AdminImport from './AdminImport';
 
 const AdminDashboard: React.FC = () => {
-  const [page, setPage] = useState<'menu' | 'students' | 'review' | 'teachers' | 'archive'>('menu');
+  const [page, setPage] = useState<'menu' | 'students' | 'import' | 'review' | 'teachers' | 'archive'>('menu');
 
   return (
     <div style={{ maxWidth: 2000, margin: '40px auto', background: '#fff', borderRadius: 6, boxShadow: '0 2px 8px #e5e7eb', padding: '32px 40px 40px 40px', minHeight: 320 }}>
@@ -59,7 +61,50 @@ const AdminDashboard: React.FC = () => {
                 查看学生信息
               </h3>
               <p style={{ margin: 0, fontSize: 14, color: '#666', lineHeight: 1.5 }}>
-                查看、导入和管理学生基本信息
+                查看和管理学生基本信息，分值修改
+              </p>
+            </div>
+
+            {/* 导入学生信息 */}
+            <div
+              onClick={() => setPage('import')}
+              style={{
+                padding: 24,
+                borderRadius: 12,
+                border: '1px solid #e0e0e0',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                background: '#fff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)';
+                e.currentTarget.style.borderColor = '#2e7d32';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
+                e.currentTarget.style.borderColor = '#e0e0e0';
+              }}
+            >
+              <div style={{ 
+                width: 48, 
+                height: 48, 
+                background: '#e8f5e8', 
+                borderRadius: 12, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                marginBottom: 16 
+              }}>
+                <span style={{ fontSize: 24, color: '#2e7d32' }}>📤</span>
+              </div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#2e7d32', marginBottom: 8 }}>
+                导入学生信息
+              </h3>
+              <p style={{ margin: 0, fontSize: 14, color: '#666', lineHeight: 1.5 }}>
+                批量导入学生信息（支持手动和Excel）
               </p>
             </div>
 
@@ -188,7 +233,7 @@ const AdminDashboard: React.FC = () => {
                 归档功能
               </h3>
               <p style={{ margin: 0, fontSize: 14, color: '#666', lineHeight: 1.5 }}>
-                查看历史数据和归档记录
+                管理毕业学生数据归档和历史记录
               </p>
             </div>
           </div>
@@ -223,6 +268,40 @@ const AdminDashboard: React.FC = () => {
             <span>←</span> 返回主页
           </button>
           <StudentTable />
+        </>
+      )}
+      {page === 'import' && (
+        <>
+          <button 
+            style={{ 
+              marginBottom: 16,
+              background: '#f5f5f5', 
+              color: '#333', 
+              border: '1px solid #e0e0e0', 
+              borderRadius: 8, 
+              padding: '12px 24px', 
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all 0.2s ease'
+            }} 
+            onClick={() => setPage('menu')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#e0e0e0';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#f5f5f5';
+            }}
+          >
+            <span>←</span> 返回主页
+          </button>
+          <AdminImport onImportSuccess={() => {
+            // 可以在这里添加导入成功后的回调逻辑
+            console.log('导入成功');
+          }} />
         </>
       )}
       {page === 'review' && (
@@ -315,11 +394,7 @@ const AdminDashboard: React.FC = () => {
           >
             <span>←</span> 返回主页
           </button>
-          {/* 归档功能组件 - 暂时显示占位内容 */}
-          <div style={{ padding: 40, textAlign: 'center', color: '#666' }}>
-            <h3 style={{ marginBottom: 16 }}>归档功能</h3>
-            <p>此功能正在开发中，将用于查看历史数据和归档记录。</p>
-          </div>
+          <ArchiveManagement />
         </>
       )}
     </div>

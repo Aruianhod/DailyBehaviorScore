@@ -620,6 +620,398 @@ app.delete('/api/teachers/:id', (req, res) => {
   });
 });
 
+// ==================== 归档功能 API ====================
+
+// 获取归档统计信息
+app.get('/api/admin/archive/stats', (req, res) => {
+  const currentYear = new Date().getFullYear();
+  
+  // 查询所有年级的学生信息
+  db.query(`
+    SELECT 
+      grade,
+      COUNT(*) as student_count,
+      COUNT(CASE WHEN status = 'active' THEN 1 END) as active_count,
+      COUNT(CASE WHEN status = 'archived' THEN 1 END) as archived_count
+    FROM students 
+    WHERE grade IS NOT NULL AND grade != ''
+    GROUP BY grade
+    ORDER BY grade
+  `, (err, gradeResults) => {
+    if (err) {
+      console.error('查询年级统计失败:', err);
+      return res.status(500).json({ message: '查询失败' });
+    }
+
+    // 计算可归档的年级（年级 + 4 <= 当前年份）
+    const graduatedGrades = [];
+    let archivableStudents = 0;
+    let totalStudents = 0;
+
+    gradeResults.forEach(row => {
+      const gradeYear = parseInt(row.grade);
+      totalStudents += row.student_count;
+      
+      if (!isNaN(gradeYear) && (gradeYear + 4 <= currentYear)) {
+        graduatedGrades.push(row.grade);
+        archivableStudents += row.active_count; // 只计算活跃状态的学生
+      }
+    });
+
+    if (graduatedGrades.length === 0) {
+      return res.json({
+        totalStudents,
+        graduatedGrades: [],
+        archivableStudents: 0,
+        archivableRecords: 0,
+        archivableApplications: 0,
+        estimatedSpaceSaving: '0 MB'
+      });
+    }    // 查询可归档的记录数和申请数
+    const gradeList = graduatedGrades.map(g => `'${g}'`).join(',');
+    
+    db.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM score_records sr 
+         JOIN students s ON sr.student_id = s.student_id 
+         WHERE s.grade IN (${gradeList}) AND s.status = 'active' AND sr.status = 'active') as record_count,
+        (SELECT COUNT(*) FROM score_applications sa 
+         JOIN students s ON sa.student_id = s.student_id 
+         WHERE s.grade IN (${gradeList}) AND s.status = 'active' AND sa.archive_status = 'active') as application_count
+    `, (err, countResults) => {
+      if (err) {
+        console.error('查询记录统计失败:', err);
+        return res.status(500).json({ message: '查询失败' });
+      }
+
+      const archivableRecords = countResults[0].record_count || 0;
+      const archivableApplications = countResults[0].application_count || 0;
+      
+      // 估算空间节省（简单估算：每条记录约1KB）
+      const totalRecords = archivableStudents + archivableRecords + archivableApplications;
+      const estimatedSpaceSaving = `${Math.round(totalRecords / 1024)} MB`;
+
+      res.json({
+        totalStudents,
+        graduatedGrades,
+        archivableStudents,
+        archivableRecords,
+        archivableApplications,
+        estimatedSpaceSaving
+      });
+    });
+  });
+});
+
+// 执行归档操作
+app.post('/api/admin/archive/execute', (req, res) => {
+  const { grades, reason } = req.body;
+  const createdBy = 'admin'; // 实际应用中应该从token获取
+
+  if (!Array.isArray(grades) || grades.length === 0) {
+    return res.status(400).json({ message: '请选择要归档的年级' });
+  }
+
+  if (!reason || reason.trim() === '') {
+    return res.status(400).json({ message: '请填写归档原因' });
+  }
+
+  const gradeList = grades.map(g => `'${g}'`).join(',');
+  
+  // 开始事务
+  db.beginTransaction((err) => {
+    if (err) {
+      console.error('开始事务失败:', err);
+      return res.status(500).json({ message: '归档失败' });
+    }
+
+    // 1. 获取要归档的数据统计
+    db.query(`      SELECT 
+        (SELECT COUNT(*) FROM students WHERE grade IN (${gradeList}) AND status = 'active') as student_count,
+        (SELECT COUNT(*) FROM score_records sr 
+         JOIN students s ON sr.student_id = s.student_id 
+         WHERE s.grade IN (${gradeList}) AND s.status = 'active' AND sr.status = 'active') as record_count,
+        (SELECT COUNT(*) FROM score_applications sa 
+         JOIN students s ON sa.student_id = s.student_id 
+         WHERE s.grade IN (${gradeList}) AND s.status = 'active' AND sa.archive_status = 'active') as application_count
+    `, (err, countResults) => {
+      if (err) {
+        return db.rollback(() => {
+          console.error('查询统计失败:', err);
+          res.status(500).json({ message: '归档失败' });
+        });
+      }
+
+      const stats = countResults[0];
+      
+      // 2. 导出数据到JSON格式（实际应用中应该写入文件）
+      db.query(`
+        SELECT s.*,               (SELECT JSON_ARRAYAGG(JSON_OBJECT(
+                 'id', sr.id,
+                 'student_id', sr.student_id,
+                 'score_change', sr.delta,
+                 'reason', sr.reason,
+                 'created_by', sr.operator,
+                 'created_at', sr.created_at
+               )) FROM score_records sr WHERE sr.student_id = s.student_id AND sr.status = 'active') as records,(SELECT JSON_ARRAYAGG(JSON_OBJECT(
+                 'id', sa.id,
+                 'student_id', sa.student_id,
+                 'score_change', sa.delta,
+                 'reason', sa.reason,
+                 'status', sa.status,
+                 'created_by', sa.teacher,
+                 'created_at', sa.created_at,
+                 'date', sa.date
+               )) FROM score_applications sa WHERE sa.student_id = s.student_id AND sa.archive_status = 'active') as applications
+        FROM students s 
+        WHERE s.grade IN (${gradeList}) AND s.status = 'active'
+      `, (err, archiveData) => {
+        if (err) {
+          return db.rollback(() => {
+            console.error('导出数据失败:', err);
+            res.status(500).json({ message: '归档失败' });
+          });
+        }        // 3. 删除相关申请记录
+        db.query(`
+          DELETE sa FROM score_applications sa 
+          JOIN students s ON sa.student_id = s.student_id 
+          WHERE s.grade IN (${gradeList}) AND s.status = 'active'
+        `, (err) => {
+          if (err) {
+            return db.rollback(() => {
+              console.error('删除申请记录失败:', err);
+              res.status(500).json({ message: '归档失败' });
+            });
+          }
+
+          // 4. 删除相关分数记录
+          db.query(`
+            DELETE sr FROM score_records sr 
+            JOIN students s ON sr.student_id = s.student_id 
+            WHERE s.grade IN (${gradeList}) AND s.status = 'active'
+          `, (err) => {
+            if (err) {
+              return db.rollback(() => {
+                console.error('删除分数记录失败:', err);
+                res.status(500).json({ message: '归档失败' });
+              });
+            }
+
+            // 5. 删除学生记录
+            db.query(`DELETE FROM students WHERE grade IN (${gradeList}) AND status = 'active'`, (err) => {
+              if (err) {
+                return db.rollback(() => {
+                  console.error('删除学生记录失败:', err);
+                  res.status(500).json({ message: '归档失败' });
+                });
+              }              // 6. 记录归档日志
+              const archiveDate = new Date().toISOString().split('T')[0];
+              const filePath = `archives/archive_${archiveDate}_${Date.now()}.json`;
+              const fileSize = JSON.stringify(archiveData).length;
+
+              // 创建完整的归档数据包
+              const fullArchiveData = {
+                archiveInfo: {
+                  archiveDate: archiveDate,
+                  grades: grades,
+                  reason: reason.trim(),
+                  createdBy: createdBy,
+                  createdAt: new Date().toISOString()
+                },
+                statistics: {
+                  studentCount: stats.student_count,
+                  recordCount: stats.record_count,
+                  applicationCount: stats.application_count
+                },
+                students: archiveData
+              };
+
+              db.query(`
+                INSERT INTO archive_logs (
+                  archive_date, grades_archived, file_path, 
+                  student_count, record_count, application_count, 
+                  file_size, archive_reason, created_by, archive_data
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `, [
+                archiveDate, JSON.stringify(grades), filePath,
+                stats.student_count, stats.record_count, stats.application_count,
+                fileSize, reason.trim(), createdBy, JSON.stringify(fullArchiveData)
+              ], (err, result) => {
+                if (err) {
+                  return db.rollback(() => {
+                    console.error('记录归档日志失败:', err);
+                    res.status(500).json({ message: '归档失败' });
+                  });
+                }
+
+                // 提交事务
+                db.commit((err) => {
+                  if (err) {
+                    return db.rollback(() => {
+                      console.error('提交事务失败:', err);
+                      res.status(500).json({ message: '归档失败' });
+                    });
+                  }
+
+                  console.log(`归档完成: ${grades.join(', ')} 年级，共 ${stats.student_count} 名学生`);
+                  res.json({
+                    message: '归档成功',
+                    archiveId: result.insertId,
+                    stats: {
+                      studentCount: stats.student_count,
+                      recordCount: stats.record_count,
+                      applicationCount: stats.application_count,
+                      grades: grades
+                    }
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
+// 获取归档历史记录
+app.get('/api/admin/archive/logs', (req, res) => {
+  db.query(`
+    SELECT 
+      id,
+      archive_date,
+      grades_archived,
+      student_count,
+      record_count,
+      application_count,
+      file_size,
+      archive_reason,
+      created_by,
+      created_at
+    FROM archive_logs 
+    ORDER BY created_at DESC
+  `, (err, results) => {
+    if (err) {
+      console.error('查询归档记录失败:', err);
+      return res.status(500).json({ message: '查询失败' });
+    }    // 解析grades_archived JSON字符串
+    const logs = results.map(log => {
+      let grades_archived;
+      try {
+        // 检查是否已经是有效的JSON字符串
+        const gradesData = log.grades_archived;
+        if (typeof gradesData === 'string') {
+          grades_archived = JSON.parse(gradesData);
+        } else if (Array.isArray(gradesData)) {
+          grades_archived = gradesData;
+        } else {
+          grades_archived = [];
+        }
+        
+        // 确保是数组
+        if (!Array.isArray(grades_archived)) {
+          grades_archived = [];
+        }
+      } catch (error) {
+        console.error('解析 grades_archived 失败:', error, '原始数据:', log.grades_archived);
+        grades_archived = [];
+      }
+      
+      return {
+        ...log,
+        grades_archived
+      };
+    });
+
+    res.json({ logs });
+  });
+});
+
+// 下载归档文件 - 完整版
+app.get('/api/admin/archive/download/:id', (req, res) => {
+  const archiveId = req.params.id;
+  console.log('📥 收到下载请求, ID:', archiveId);
+  
+  if (!archiveId || isNaN(archiveId)) {
+    console.log('❌ 无效的归档ID');
+    return res.status(400).json({ message: '无效的归档ID' });
+  }
+
+  try {
+    // 查询归档记录
+    db.query('SELECT * FROM archive_logs WHERE id = ?', [archiveId], (err, results) => {
+      if (err) {
+        console.error('❌ 查询失败:', err);
+        return res.status(500).json({ message: '查询失败' });
+      }
+
+      if (results.length === 0) {
+        console.log('❌ 记录不存在');
+        return res.status(404).json({ message: '归档记录不存在' });
+      }
+
+      console.log('✅ 找到记录');
+      const archiveLog = results[0];
+      
+      let downloadData;
+      
+      // 如果有完整的归档数据，使用它
+      if (archiveLog.archive_data) {
+        try {
+          downloadData = JSON.parse(archiveLog.archive_data);
+          console.log('✅ 使用完整归档数据');
+        } catch (parseErr) {
+          console.error('❌ 解析归档数据失败:', parseErr);
+          // 如果解析失败，使用简化数据
+          downloadData = {
+            archiveInfo: {
+              id: archiveLog.id,
+              archiveDate: archiveLog.archive_date,
+              grades: JSON.parse(archiveLog.grades_archived || '[]'),
+              reason: archiveLog.archive_reason,
+              createdBy: archiveLog.created_by,
+              createdAt: archiveLog.created_at
+            },
+            statistics: {
+              studentCount: archiveLog.student_count,
+              recordCount: archiveLog.record_count,
+              applicationCount: archiveLog.application_count
+            },
+            note: '归档摘要信息（完整数据解析失败）'
+          };
+        }
+      } else {
+        // 兼容旧的归档记录，提供简化数据
+        downloadData = {
+          archiveInfo: {
+            id: archiveLog.id,
+            archiveDate: archiveLog.archive_date,
+            grades: JSON.parse(archiveLog.grades_archived || '[]'),
+            reason: archiveLog.archive_reason,
+            createdBy: archiveLog.created_by,
+            createdAt: archiveLog.created_at
+          },
+          statistics: {
+            studentCount: archiveLog.student_count,
+            recordCount: archiveLog.record_count,
+            applicationCount: archiveLog.application_count
+          },
+          note: '归档摘要信息（旧版本归档，无完整数据）'
+        };
+        console.log('⚠️ 使用简化归档数据（旧版本）');
+      }
+
+      console.log('📤 发送响应');
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="archive_${archiveId}.json"`);
+      res.json(downloadData);
+    });
+  } catch (error) {
+    console.error('💥 处理错误:', error);
+    res.status(500).json({ message: '处理失败' });
+  }
+});
+
 // 老师修改密码接口
 app.post('/api/teacher/change-password', (req, res) => {
   const { username, currentPassword, newPassword } = req.body;

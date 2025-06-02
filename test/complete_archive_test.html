@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>归档功能完整测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-panel {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .iframe-container {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 600px;
+            margin: 20px 0;
+        }
+        .test-button {
+            background: #7b1fa2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+        .test-button:hover { background: #6a1b9a; }
+        .test-button.secondary {
+            background: #1976d2;
+        }
+        .test-button.secondary:hover {
+            background: #1565c0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .error { background: #ffebee; color: #d32f2f; }
+        .info { background: #e3f2fd; color: #1976d2; }
+        .warning { background: #fff3e0; color: #f57c00; }
+        .instructions {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .code-block {
+            background: #263238;
+            color: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-panel">
+        <h1>归档功能完整测试</h1>
+        <p>这个页面将帮助我们全面测试归档功能的工作状态。</p>
+        
+        <div class="instructions">
+            <h3>测试步骤：</h3>
+            <ol>
+                <li>确保前端和后端服务器都在运行</li>
+                <li>点击下方的测试按钮验证各项功能</li>
+                <li>在内嵌的应用页面中测试归档功能</li>
+                <li>查看控制台输出了解详细信息</li>
+            </ol>
+        </div>
+        
+        <div>
+            <button class="test-button" onclick="testBackend()">测试后端连接</button>
+            <button class="test-button" onclick="testFrontend()">测试前端连接</button>
+            <button class="test-button" onclick="testArchiveAPI()">测试归档API</button>
+            <button class="test-button secondary" onclick="injectDebugScript()">注入调试脚本到应用</button>
+            <button class="test-button secondary" onclick="openDevTools()">提示打开开发者工具</button>
+        </div>
+        
+        <div id="test-results"></div>
+        
+        <h3>内嵌应用页面（直接测试）</h3>
+        <div class="iframe-container">
+            <iframe id="app-frame" src="http://localhost:5173/" style="width: 100%; height: 100%; border: none;"></iframe>
+        </div>
+        
+        <div class="instructions">
+            <h3>手动测试说明：</h3>
+            <p>在上方的内嵌应用中：</p>
+            <ol>
+                <li>查看管理员功能页面</li>
+                <li>找到"归档功能"卡片（紫色图标 📁）</li>
+                <li>点击归档功能卡片</li>
+                <li>验证是否正确跳转到归档管理页面</li>
+                <li>检查是否显示"返回主页"按钮</li>
+            </ol>
+        </div>
+        
+        <div class="test-panel">
+            <h3>调试脚本</h3>
+            <p>如果归档功能无法正常工作，请打开浏览器开发者工具（F12），然后运行以下脚本：</p>
+            <div class="code-block" id="debug-script">
+// 在浏览器控制台中运行此脚本
+console.log('=== 归档功能调试 ===');
+
+// 1. 检查归档卡片
+const cards = document.querySelectorAll('div[style*="cursor: pointer"]');
+console.log('找到卡片数量:', cards.length);
+
+cards.forEach((card, index) => {
+    if (card.textContent.includes('归档功能')) {
+        console.log('找到归档功能卡片:', card);
+        
+        // 强制触发点击
+        card.click();
+        console.log('已点击归档卡片');
+        
+        // 检查点击后的状态
+        setTimeout(() => {
+            const content = document.body.textContent;
+            if (content.includes('管理毕业学生数据归档')) {
+                console.log('✓ 归档页面加载成功');
+            } else {
+                console.log('✗ 归档页面未正确加载');
+            }
+        }, 1000);
+    }
+});
+            </div>
+            <button class="test-button" onclick="copyDebugScript()">复制调试脚本</button>
+        </div>
+    </div>
+
+    <script>
+        const results = document.getElementById('test-results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+        }
+        
+        async function testBackend() {
+            addResult('测试后端连接...', 'info');
+            try {
+                const response = await fetch('http://localhost:3000/api/admin/archive/stats');
+                if (response.ok) {
+                    addResult('✓ 后端服务器连接正常', 'success');
+                } else {
+                    addResult(`✗ 后端响应错误: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult(`✗ 后端连接失败: ${error.message}`, 'error');
+                addResult('请确保后端服务器已启动 (node server.cjs)', 'warning');
+            }
+        }
+        
+        async function testFrontend() {
+            addResult('测试前端连接...', 'info');
+            try {
+                const response = await fetch('http://localhost:5173/');
+                if (response.ok) {
+                    addResult('✓ 前端服务器连接正常', 'success');
+                } else {
+                    addResult(`✗ 前端响应错误: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult(`✗ 前端连接失败: ${error.message}`, 'error');
+                addResult('请确保前端服务器已启动 (npm run dev)', 'warning');
+            }
+        }
+        
+        async function testArchiveAPI() {
+            addResult('测试归档API...', 'info');
+            try {
+                const response = await fetch('http://localhost:3000/api/admin/archive/stats');
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('✓ 归档API工作正常', 'success');
+                    addResult(`归档统计: 总学生数=${data.totalStudents || 0}`, 'info');
+                } else {
+                    addResult(`✗ 归档API错误: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult(`✗ 归档API连接失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function injectDebugScript() {
+            const iframe = document.getElementById('app-frame');
+            if (iframe && iframe.contentWindow) {
+                try {
+                    const script = `
+                        console.log('=== 调试脚本已注入 ===');
+                        window.debugArchive = function() {
+                            const cards = document.querySelectorAll('div[style*="cursor: pointer"]');
+                            console.log('找到', cards.length, '个卡片');
+                            
+                            cards.forEach((card, index) => {
+                                console.log('卡片', index, ':', card.textContent.substring(0, 30));
+                                if (card.textContent.includes('归档功能')) {
+                                    console.log('找到归档功能卡片，执行点击...');
+                                    card.click();
+                                }
+                            });
+                        };
+                        console.log('可以调用 debugArchive() 来测试归档功能');
+                    `;
+                    iframe.contentWindow.eval(script);
+                    addResult('✓ 调试脚本已注入到应用页面', 'success');
+                    addResult('在浏览器控制台中调用 debugArchive() 来测试', 'info');
+                } catch (error) {
+                    addResult(`✗ 脚本注入失败: ${error.message}`, 'error');
+                }
+            } else {
+                addResult('✗ 无法访问应用页面，可能存在跨域限制', 'error');
+            }
+        }
+        
+        function openDevTools() {
+            addResult('提示：请按 F12 打开开发者工具，然后在控制台中运行调试脚本', 'warning');
+            alert('请按 F12 打开开发者工具，然后在控制台中粘贴运行下方的调试脚本');
+        }
+        
+        function copyDebugScript() {
+            const script = document.getElementById('debug-script').textContent;
+            navigator.clipboard.writeText(script).then(() => {
+                addResult('✓ 调试脚本已复制到剪贴板', 'success');
+            }).catch(err => {
+                addResult('✗ 复制失败，请手动复制脚本', 'error');
+            });
+        }
+        
+        // 页面加载时自动运行基础测试
+        window.onload = function() {
+            addResult('测试页面已加载', 'info');
+            setTimeout(() => {
+                testBackend();
+                setTimeout(testFrontend, 500);
+                setTimeout(testArchiveAPI, 1000);
+            }, 1000);
+        };
+        
+        // 监听iframe加载完成
+        document.getElementById('app-frame').onload = function() {
+            addResult('应用页面已加载，可以开始测试归档功能', 'success');
+        };
+    </script>
+</body>
+</html>

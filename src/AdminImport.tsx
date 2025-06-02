@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import './App.css';
-import StudentTable from './StudentTable';
 
 interface Student {
   id: string;

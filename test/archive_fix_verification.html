@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>归档功能修复验证</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        .success { color: #2e7d32; background: #e8f5e8; }
+        .error { color: #d32f2f; background: #ffebee; }
+        .info { color: #1976d2; background: #e3f2fd; }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #1565c0; }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-card">
+        <h1>归档功能白屏问题修复验证</h1>
+        <p>这个页面用于验证归档功能的错误修复。</p>
+        
+        <div class="test-card info">
+            <h3>问题描述：</h3>
+            <p>进入归档页面后出现白屏，控制台报错：</p>
+            <pre>Uncaught TypeError: log.grades_archived.join is not a function</pre>
+        </div>
+        
+        <div class="test-card success">
+            <h3>修复内容：</h3>
+            <ol>
+                <li>在前端添加了类型安全检查，处理 grades_archived 可能不是数组的情况</li>
+                <li>在后端添加了 JSON 解析错误处理和类型验证</li>
+                <li>更新了 TypeScript 接口定义，支持 string[] | string 类型</li>
+            </ol>
+        </div>
+        
+        <button onclick="testAPI()">测试后端API</button>
+        <button onclick="openArchivePage()">打开归档页面</button>
+        <button onclick="testDataProcessing()">测试数据处理逻辑</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        function addResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-card ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+        }
+        
+        async function testAPI() {
+            addResult('测试归档日志API...', 'info');
+            try {
+                const response = await fetch('http://localhost:3000/api/admin/archive/logs');
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('✓ API调用成功', 'success');
+                    addResult(`找到 ${data.logs.length} 条归档记录`, 'info');
+                    
+                    // 测试数据结构
+                    if (data.logs.length > 0) {
+                        const firstLog = data.logs[0];
+                        addResult(`grades_archived 类型: ${Array.isArray(firstLog.grades_archived) ? 'Array' : typeof firstLog.grades_archived}`, 'info');
+                        addResult(`grades_archived 值: ${JSON.stringify(firstLog.grades_archived)}`, 'info');
+                    }
+                } else {
+                    addResult(`✗ API调用失败: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addResult(`✗ 网络错误: ${error.message}`, 'error');
+            }
+        }
+        
+        function openArchivePage() {
+            addResult('打开归档页面...', 'info');
+            window.open('http://localhost:5173/', '_blank');
+            addResult('请在新窗口中登录管理员账号并点击归档功能', 'info');
+        }
+        
+        function testDataProcessing() {
+            addResult('测试数据处理逻辑...', 'info');
+            
+            // 模拟不同类型的 grades_archived 数据
+            const testCases = [
+                { grades_archived: ['2020', '2021'], expected: '2020, 2021级' },
+                { grades_archived: [], expected: '级' },
+                { grades_archived: '2020,2021', expected: '2020,2021' },
+                { grades_archived: null, expected: '未知' },
+                { grades_archived: undefined, expected: '未知' }
+            ];
+            
+            testCases.forEach((testCase, index) => {
+                const result = processGradesArchived(testCase.grades_archived);
+                const passed = result === testCase.expected;
+                addResult(`测试案例 ${index + 1}: ${passed ? '✓' : '✗'} ${result}`, passed ? 'success' : 'error');
+            });
+        }
+        
+        function processGradesArchived(grades_archived) {
+            // 复制前端的处理逻辑
+            if (Array.isArray(grades_archived)) {
+                return grades_archived.join(', ') + '级';
+            } else if (typeof grades_archived === 'string') {
+                return grades_archived;
+            } else {
+                return '未知';
+            }
+        }
+        
+        // 页面加载时自动运行API测试
+        window.onload = function() {
+            addResult('页面加载完成，开始自动测试', 'info');
+            setTimeout(testAPI, 1000);
+        };
+    </script>
+</body>
+</html>

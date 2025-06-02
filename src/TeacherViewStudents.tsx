@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import AlertDialog from './components/AlertDialog';
+import { useDialog } from './hooks/useDialog';
 
 interface Student {
   id?: number;
@@ -29,9 +31,11 @@ const TeacherViewStudents: React.FC = () => {
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedGrade, setSelectedGrade] = useState<string>('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [scoreRecords, setScoreRecords] = useState<ScoreRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [scoreRecords, setScoreRecords] = useState<ScoreRecord[]>([]);  const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  
+  // 使用自定义弹窗
+  const { showAlert, alertState, closeAlert } = useDialog();
 
   // 获取年级选项
   useEffect(() => {
@@ -134,11 +138,9 @@ const TeacherViewStudents: React.FC = () => {
       console.error('学生ID为空:', student);
       setScoreRecords([]);
     }
-  };
-  // 导出Excel
-  const exportToExcel = async () => {
-    if (!selectedClass) {
-      alert('请先选择要导出的班级！');
+  };  // 导出Excel
+  const exportToExcel = async () => {    if (!selectedClass) {
+      showAlert('请先选择要导出的班级！', '请选择班级', 'warning');
       return;
     }
 
@@ -146,12 +148,13 @@ const TeacherViewStudents: React.FC = () => {
     try {
       // 获取选定班级的学生数据
       const studentsToExport = students.filter(s => s.class === selectedClass);
-      
-      if (studentsToExport.length === 0) {
-        alert('选定班级没有学生数据！');
+        if (studentsToExport.length === 0) {
+        showAlert('选定班级没有学生数据！', '无数据', 'warning');
         setExporting(false);
         return;
-      }      // 发送导出请求
+      }
+
+      // 发送导出请求
       console.log('导出的学生数据:', studentsToExport); // 调试日志
       const exportData = {
         class_name: selectedClass,
@@ -171,7 +174,9 @@ const TeacherViewStudents: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(exportData)
-      });      if (response.ok) {
+      });
+
+      if (response.ok) {
         // 下载文件
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -181,16 +186,15 @@ const TeacherViewStudents: React.FC = () => {
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        alert('导出成功！');
+        document.body.removeChild(a);        showAlert('文件已成功下载到本地', '导出成功', 'success');
       } else {
         const errorData = await response.json();
         console.error('导出失败:', errorData);
-        alert(`导出失败：${errorData.message || '未知错误'}`);
+        showAlert(errorData.message || '未知错误', '导出失败', 'error');
       }
     } catch (err) {
       console.error('导出失败:', err);
-      alert('导出失败，请重试！');
+      showAlert('网络错误，请重试！', '导出失败', 'error');
     }
     setExporting(false);
   };
@@ -517,10 +521,18 @@ const TeacherViewStudents: React.FC = () => {
                   ))
                 )}
               </tbody>
-            </table>
-          </div>
+            </table>          </div>
         </div>
       )}
+      
+      {/* 对话框组件 */}
+      <AlertDialog
+        isOpen={alertState.isOpen}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        onClose={closeAlert}
+      />
     </div>
   );
 };

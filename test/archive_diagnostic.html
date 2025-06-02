@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>归档功能诊断</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .diagnostic { 
+            background: #f5f5f5; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 8px; 
+            border-left: 4px solid #2196F3;
+        }
+        .error { border-left-color: #f44336; }
+        .success { border-left-color: #4CAF50; }
+        .warning { border-left-color: #ff9800; }
+        button { 
+            background: #7b1fa2; 
+            color: white; 
+            padding: 12px 24px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            margin: 5px;
+        }
+        button:hover { background: #6a1a8c; }
+    </style>
+</head>
+<body>
+    <h1>🔍 归档功能诊断工具</h1>
+    
+    <button onclick="checkAPIs()">检查后端API</button>
+    <button onclick="checkFrontend()">检查前端状态</button>
+    <button onclick="simulateClick()">模拟点击归档功能</button>
+    <button onclick="checkConsole()">检查控制台错误</button>
+    
+    <div id="diagnostics"></div>
+
+    <script>
+        function addDiagnostic(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `diagnostic ${type}`;
+            div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            document.getElementById('diagnostics').appendChild(div);
+        }
+        
+        async function checkAPIs() {
+            addDiagnostic('正在检查归档相关API...');
+            
+            try {
+                // 检查归档统计API
+                const statsResponse = await fetch('http://localhost:3000/api/admin/archive/stats');
+                if (statsResponse.ok) {
+                    const statsData = await statsResponse.json();
+                    addDiagnostic(`✅ 归档统计API正常 - 总学生数: ${statsData.totalStudents}`, 'success');
+                } else {
+                    addDiagnostic(`❌ 归档统计API错误 - 状态码: ${statsResponse.status}`, 'error');
+                }
+                
+                // 检查归档历史API
+                const logsResponse = await fetch('http://localhost:3000/api/admin/archive/logs');
+                if (logsResponse.ok) {
+                    const logsData = await logsResponse.json();
+                    addDiagnostic(`✅ 归档历史API正常 - 记录数: ${logsData.logs?.length || 0}`, 'success');
+                } else {
+                    addDiagnostic(`❌ 归档历史API错误 - 状态码: ${logsResponse.status}`, 'error');
+                }
+            } catch (error) {
+                addDiagnostic(`❌ API检查失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function checkFrontend() {
+            addDiagnostic('正在检查前端状态...');
+            
+            // 尝试连接到前端
+            const iframe = document.createElement('iframe');
+            iframe.src = 'http://localhost:3000';
+            iframe.style.display = 'none';
+            iframe.onload = () => {
+                addDiagnostic('✅ 前端页面可以加载', 'success');
+                // 检查React组件
+                try {
+                    const adminDashboard = iframe.contentWindow;
+                    if (adminDashboard) {
+                        addDiagnostic('✅ 前端页面内容可访问', 'success');
+                    }
+                } catch (e) {
+                    addDiagnostic('⚠️ 无法访问前端页面内容（跨域限制）', 'warning');
+                }
+            };
+            iframe.onerror = () => {
+                addDiagnostic('❌ 前端页面加载失败', 'error');
+            };
+            document.body.appendChild(iframe);
+        }
+        
+        function simulateClick() {
+            addDiagnostic('正在模拟归档功能点击...');
+            
+            // 在新窗口中打开前端页面
+            const newWindow = window.open('http://localhost:3000', '_blank');
+            
+            setTimeout(() => {
+                addDiagnostic('🔗 已在新窗口打开前端页面，请手动测试归档功能', 'warning');
+                addDiagnostic('📝 测试步骤：1. 登录管理员账号 2. 点击"归档功能"卡片 3. 查看是否正常进入归档页面');
+            }, 1000);
+        }
+        
+        function checkConsole() {
+            addDiagnostic('正在检查控制台错误...');
+            
+            // 监听错误
+            window.addEventListener('error', (e) => {
+                addDiagnostic(`❌ JavaScript错误: ${e.message}`, 'error');
+            });
+            
+            // 检查网络错误
+            window.addEventListener('unhandledrejection', (e) => {
+                addDiagnostic(`❌ Promise错误: ${e.reason}`, 'error');
+            });
+            
+            addDiagnostic('✅ 错误监听器已设置', 'success');
+        }
+        
+        // 页面加载时自动检查
+        window.onload = () => {
+            addDiagnostic('🚀 诊断工具已启动');
+            checkAPIs();
+        };
+    </script>
+</body>
+</html>

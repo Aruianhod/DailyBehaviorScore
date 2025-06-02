@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>前端归档功能测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .step { margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff; }
+        .success { border-left-color: #28a745; background: #d4edda; }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        .warning { border-left-color: #ffc107; background: #fff3cd; }
+        button { 
+            background: #7b1fa2; color: white; padding: 10px 20px; 
+            border: none; border-radius: 5px; cursor: pointer; margin: 5px;
+        }
+        iframe { width: 100%; height: 600px; border: 1px solid #ddd; margin-top: 20px; }
+        .console-output { 
+            background: #1e1e1e; color: #fff; padding: 15px; 
+            border-radius: 5px; font-family: monospace; margin: 10px 0;
+            max-height: 300px; overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 前端归档功能诊断</h1>
+        
+        <div class="step">
+            <h3>步骤 1: 检查前端页面加载</h3>
+            <button onclick="loadFrontend()">加载前端页面</button>
+            <button onclick="checkConsole()">检查控制台</button>
+            <div id="frontend-status">等待测试...</div>
+        </div>
+        
+        <div class="step">
+            <h3>步骤 2: 模拟用户操作</h3>
+            <button onclick="simulateLogin()">模拟登录</button>
+            <button onclick="simulateArchiveClick()">模拟点击归档功能</button>
+            <div id="operation-status">等待操作...</div>
+        </div>
+        
+        <div class="step">
+            <h3>步骤 3: 组件状态检查</h3>
+            <button onclick="checkComponents()">检查React组件</button>
+            <div id="component-status">等待检查...</div>
+        </div>
+        
+        <div class="console-output" id="console-log">
+            控制台输出将显示在这里...
+        </div>
+        
+        <iframe id="test-frame" src="about:blank"></iframe>
+    </div>
+
+    <script>
+        let consoleMessages = [];
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logElement = document.getElementById('console-log');
+            const color = type === 'error' ? '#ff6b6b' : type === 'success' ? '#51cf66' : '#74c0fc';
+            logElement.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+            logElement.scrollTop = logElement.scrollHeight;
+            consoleMessages.push({timestamp, message, type});
+        }
+        
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'warning';
+            element.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+        
+        function loadFrontend() {
+            addLog('正在加载前端页面...');
+            const iframe = document.getElementById('test-frame');
+            
+            iframe.onload = () => {
+                addLog('✅ 前端页面加载成功', 'success');
+                updateStatus('frontend-status', '✅ 前端页面加载成功', 'success');
+                
+                // 尝试检查页面内容
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (doc) {
+                        addLog('✅ 可以访问页面内容', 'success');
+                        
+                        // 查找React应用根元素
+                        const appRoot = doc.getElementById('root');
+                        if (appRoot) {
+                            addLog('✅ 找到React应用根元素', 'success');
+                        } else {
+                            addLog('❌ 未找到React应用根元素', 'error');
+                        }
+                    }
+                } catch (e) {
+                    addLog(`⚠️ 无法直接访问页面内容: ${e.message}`, 'warning');
+                }
+            };
+            
+            iframe.onerror = () => {
+                addLog('❌ 前端页面加载失败', 'error');
+                updateStatus('frontend-status', '❌ 前端页面加载失败', 'error');
+            };
+            
+            iframe.src = 'http://localhost:3000';
+        }
+        
+        function checkConsole() {
+            addLog('开始监听控制台错误...');
+            
+            // 监听全局错误
+            window.addEventListener('error', (e) => {
+                addLog(`❌ JavaScript错误: ${e.message} (${e.filename}:${e.lineno})`, 'error');
+            });
+            
+            window.addEventListener('unhandledrejection', (e) => {
+                addLog(`❌ Promise rejection: ${e.reason}`, 'error');
+            });
+            
+            addLog('✅ 错误监听器已设置', 'success');
+        }
+        
+        function simulateLogin() {
+            addLog('模拟管理员登录...');
+            updateStatus('operation-status', '正在模拟登录...', 'warning');
+            
+            // 使用postMessage与iframe通信
+            const iframe = document.getElementById('test-frame');
+            if (iframe && iframe.contentWindow) {
+                try {
+                    iframe.contentWindow.postMessage({
+                        type: 'SIMULATE_LOGIN',
+                        username: 'admin',
+                        password: 'admin123'
+                    }, '*');
+                    
+                    addLog('✅ 登录命令已发送', 'success');
+                    updateStatus('operation-status', '✅ 登录命令已发送', 'success');
+                } catch (e) {
+                    addLog(`❌ 登录模拟失败: ${e.message}`, 'error');
+                    updateStatus('operation-status', '❌ 登录模拟失败', 'error');
+                }
+            } else {
+                addLog('❌ 无法找到iframe或其内容窗口', 'error');
+                updateStatus('operation-status', '❌ 无法访问前端页面', 'error');
+            }
+        }
+        
+        function simulateArchiveClick() {
+            addLog('模拟点击归档功能...');
+            updateStatus('operation-status', '正在模拟点击归档功能...', 'warning');
+            
+            const iframe = document.getElementById('test-frame');
+            if (iframe && iframe.contentWindow) {
+                try {
+                    iframe.contentWindow.postMessage({
+                        type: 'SIMULATE_ARCHIVE_CLICK'
+                    }, '*');
+                    
+                    addLog('✅ 归档点击命令已发送', 'success');
+                    updateStatus('operation-status', '✅ 归档点击命令已发送', 'success');
+                } catch (e) {
+                    addLog(`❌ 归档点击模拟失败: ${e.message}`, 'error');
+                    updateStatus('operation-status', '❌ 归档点击模拟失败', 'error');
+                }
+            }
+        }
+        
+        function checkComponents() {
+            addLog('检查React组件状态...');
+            updateStatus('component-status', '正在检查组件...', 'warning');
+            
+            // 这里我们可以通过postMessage获取组件状态
+            const iframe = document.getElementById('test-frame');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'CHECK_COMPONENTS'
+                }, '*');
+                
+                addLog('✅ 组件检查命令已发送', 'success');
+            }
+        }
+        
+        // 监听来自iframe的消息
+        window.addEventListener('message', (event) => {
+            if (event.origin !== 'http://localhost:3000') return;
+            
+            const { type, data } = event.data;
+            
+            switch (type) {
+                case 'COMPONENT_STATUS':
+                    addLog(`📊 组件状态: ${JSON.stringify(data)}`, 'success');
+                    updateStatus('component-status', `组件状态已获取: ${JSON.stringify(data)}`, 'success');
+                    break;
+                case 'ARCHIVE_CLICK_RESULT':
+                    addLog(`🎯 归档点击结果: ${data.success ? '成功' : '失败'}`, data.success ? 'success' : 'error');
+                    break;
+                case 'ERROR':
+                    addLog(`❌ 前端错误: ${data.message}`, 'error');
+                    break;
+                default:
+                    addLog(`📨 收到消息: ${type}`, 'info');
+            }
+        });
+        
+        // 页面加载时自动开始检查
+        window.onload = () => {
+            addLog('🚀 诊断工具已启动');
+            checkConsole();
+        };
+    </script>
+</body>
+</html>

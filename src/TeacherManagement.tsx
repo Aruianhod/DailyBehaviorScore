@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import AlertDialog from './components/AlertDialog';
+import ConfirmDialog from './components/ConfirmDialog';
+import { useDialog } from './hooks/useDialog';
 
 interface Teacher {
   id: number;
@@ -13,6 +16,9 @@ const TeacherManagement: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // 使用自定义弹窗
+  const { showAlert, alertState, closeAlert, showConfirm, confirmState, closeConfirm } = useDialog();
 
   // 获取老师列表
   const fetchTeachers = async () => {
@@ -54,14 +60,12 @@ const TeacherManagement: React.FC = () => {
           name: newName.trim(),
           password: '123456' // 固定初始密码
         })
-      });
-
-      if (response.ok) {
+      });      if (response.ok) {
         setNewUsername('');
         setNewName('');
         setError('');
         await fetchTeachers(); // 刷新列表
-        alert('老师账号创建成功！初始密码为：123456');
+        await showAlert('老师账号创建成功！初始密码为：123456', '创建成功', 'success');
       } else {
         const errorData = await response.json();
         setError(errorData.message || '创建失败');
@@ -73,10 +77,15 @@ const TeacherManagement: React.FC = () => {
       setIsLoading(false);
     }
   };
-
   // 删除老师账号
   const deleteTeacher = async (id: number, username: string) => {
-    if (!confirm(`确定要删除老师账号 "${username}" 吗？`)) {
+    const confirmed = await showConfirm(
+      `确定要删除老师账号 "${username || '未知用户'}" 吗？`, 
+      '确认删除',
+      'danger'
+    );
+    
+    if (!confirmed) {
       return;
     }
 
@@ -87,20 +96,19 @@ const TeacherManagement: React.FC = () => {
 
       if (response.ok) {
         await fetchTeachers(); // 刷新列表
-        alert('老师账号删除成功');
+        await showAlert('老师账号删除成功', '删除成功', 'success');
       } else {
-        alert('删除失败');
+        await showAlert('删除失败', '错误', 'error');
       }
     } catch (error) {
       console.error('删除老师账号出错:', error);
-      alert('网络错误，请稍后重试');
+      await showAlert('网络错误，请稍后重试', '错误', 'error');
     }
   };
 
   useEffect(() => {
     fetchTeachers();
   }, []);
-
   return (
     <div>
       <h3 style={{ marginBottom: 24, fontSize: 20, fontWeight: 600 }}>老师账号管理</h3>
@@ -240,13 +248,13 @@ const TeacherManagement: React.FC = () => {
                 {teachers.map((teacher) => (
                   <tr key={teacher.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '12px 16px', fontSize: 14 }}>
-                      {teacher.username}
+                      {teacher.username || '未知用户'}
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 500 }}>
-                      {teacher.name || teacher.username}
+                      {teacher.name || teacher.username || '未知姓名'}
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: 14, color: '#6c757d' }}>
-                      {new Date(teacher.created_at).toLocaleString('zh-CN')}
+                      {teacher.created_at ? new Date(teacher.created_at).toLocaleString('zh-CN') : '未知时间'}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <button
@@ -271,6 +279,24 @@ const TeacherManagement: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* 弹窗组件 */}
+      <AlertDialog
+        isOpen={alertState.isOpen}
+        onClose={closeAlert}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+      />
+      
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onConfirm={() => closeConfirm(true)}
+        onCancel={() => closeConfirm(false)}
+        title={confirmState.title}
+        message={confirmState.message}
+        type={confirmState.type}
+      />
     </div>
   );
 };

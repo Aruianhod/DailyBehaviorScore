@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1988级归档测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .step {
+            margin: 15px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+        .step.completed { 
+            border-color: #4caf50; 
+            background: #e8f5e8; 
+        }
+        .step.error { 
+            border-color: #f44336; 
+            background: #ffeaea; 
+        }
+        .btn {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary { 
+            background: #2196f3; 
+            color: white; 
+        }
+        .btn-danger { 
+            background: #f44336; 
+            color: white; 
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .result.success { 
+            background: #e8f5e8; 
+            border: 1px solid #4caf50; 
+        }
+        .result.error { 
+            background: #ffeaea; 
+            border: 1px solid #f44336; 
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin: 5px 0;
+        }
+        .status.online { 
+            background: #e8f5e8; 
+            color: #2e7d32; 
+        }
+        .status.offline { 
+            background: #ffeaea; 
+            color: #c62828; 
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 1988级归档测试</h1>
+        
+        <div class="status" id="serverStatus">
+            检查服务器状态...
+        </div>
+        
+        <div class="step">
+            <h3>📋 归档条件检查</h3>
+            <p>
+                <strong>1988级归档条件：</strong><br>
+                年级 + 4 ≤ 当前年份<br>
+                1988 + 4 = 1992 ≤ 2025 ✅ <strong>应该可以归档</strong>
+            </p>
+        </div>
+
+        <div class="step" id="step1">
+            <h3>步骤1：创建1988级测试数据</h3>
+            <button class="btn btn-primary" onclick="createTestData()">创建测试数据</button>
+            <div id="result1" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="step" id="step2">
+            <h3>步骤2：检查归档统计</h3>
+            <button class="btn btn-primary" onclick="checkArchiveStats()">检查归档统计</button>
+            <div id="result2" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="step" id="step3">
+            <h3>步骤3：执行归档操作</h3>
+            <button class="btn btn-danger" onclick="executeArchive()">执行1988级归档</button>
+            <div id="result3" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        
+        // 检查服务器状态
+        async function checkServerStatus() {
+            const statusDiv = document.getElementById('serverStatus');
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/archive/stats`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    statusDiv.textContent = '✅ 后端服务器连接正常 (端口3000)';
+                    statusDiv.className = 'status online';
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                statusDiv.textContent = `❌ 后端服务器连接失败: ${error.message}`;
+                statusDiv.className = 'status offline';
+                console.error('服务器连接错误:', error);
+            }
+        }
+
+        async function createTestData() {
+            const resultDiv = document.getElementById('result1');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = '正在创建1988级测试数据...';
+            
+            try {
+                const testStudent = {
+                    students: [
+                        { id: '1988010101', name: '张老前辈', grade: '1988', class: '88101' },
+                        { id: '1988010102', name: '李老校友', grade: '1988', class: '88101' }
+                    ]
+                };
+                
+                const response = await fetch(`${API_BASE}/api/admin/import`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    mode: 'cors',
+                    body: JSON.stringify(testStudent)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ 创建成功：${result.message}\n创建了${testStudent.students.length}名1988级学生`;
+                    document.getElementById('step1').className = 'step completed';
+                } else {
+                    throw new Error(result.message || '创建失败');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ 创建失败：${error.message}`;
+                document.getElementById('step1').className = 'step error';
+                console.error('创建数据错误:', error);
+            }
+        }
+
+        async function checkArchiveStats() {
+            const resultDiv = document.getElementById('result2');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = '正在检查归档统计...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/archive/stats`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                const stats = await response.json();
+                
+                if (response.ok) {
+                    const has1988 = stats.graduatedGrades && stats.graduatedGrades.includes('1988');
+                    
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `📊 归档统计结果：
+总学生数：${stats.totalStudents || 0}
+可归档年级：[${(stats.graduatedGrades || []).join(', ')}]
+可归档学生数：${stats.archivableStudents || 0}
+1988级是否可归档：${has1988 ? '✅ 是' : '❌ 否'}
+
+详细信息：
+- 可归档记录数：${stats.archivableRecords || 0}
+- 可归档申请数：${stats.archivableApplications || 0}
+- 预计节省空间：${stats.estimatedSpaceSaving || '0 MB'}`;
+                    
+                    if (has1988) {
+                        document.getElementById('step2').className = 'step completed';
+                    } else {
+                        document.getElementById('step2').className = 'step error';
+                    }
+                } else {
+                    throw new Error(stats.message || '检查失败');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ 检查失败：${error.message}`;
+                document.getElementById('step2').className = 'step error';
+                console.error('检查统计错误:', error);
+            }
+        }
+
+        async function executeArchive() {
+            const resultDiv = document.getElementById('result3');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = '正在执行1988级归档...';
+            
+            try {
+                const archiveData = {
+                    grades: ['1988'],
+                    reason: '1988级毕业超过4年，符合归档条件'
+                };
+                
+                const response = await fetch(`${API_BASE}/api/admin/archive/execute`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    mode: 'cors',
+                    body: JSON.stringify(archiveData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ 归档成功：${result.message}
+归档ID：${result.archiveId || 'N/A'}
+统计信息：
+- 学生数：${result.stats?.studentCount || 0}
+- 记录数：${result.stats?.recordCount || 0}
+- 申请数：${result.stats?.applicationCount || 0}
+- 年级：[${(result.stats?.grades || []).join(', ')}]`;
+                    document.getElementById('step3').className = 'step completed';
+                } else {
+                    throw new Error(result.message || '归档失败');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ 归档失败：${error.message}`;
+                document.getElementById('step3').className = 'step error';
+                console.error('归档错误:', error);
+            }
+        }
+
+        // 页面加载时检查服务器状态
+        window.onload = function() {
+            console.log('页面加载完成，检查服务器状态...');
+            checkServerStatus();
+        };
+
+        // 定期检查服务器状态
+        setInterval(checkServerStatus, 30000); // 30秒检查一次
+    </script>
+</body>
+</html>

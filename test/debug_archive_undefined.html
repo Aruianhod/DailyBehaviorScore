@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>归档API调试</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .error { color: #d32f2f; }
+        .success { color: #2e7d32; }
+        .warning { color: #f57c00; }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 归档API调试工具</h1>
+        
+        <div class="section">
+            <h2>📊 归档统计API</h2>
+            <button onclick="testStatsAPI()">测试统计API</button>
+            <div id="statsResult"></div>
+        </div>
+        
+        <div class="section">
+            <h2>📋 归档日志API</h2>
+            <button onclick="testLogsAPI()">测试日志API</button>
+            <div id="logsResult"></div>
+        </div>
+        
+        <div class="section">
+            <h2>🔧 问题分析</h2>
+            <div id="analysisResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        
+        function log(elementId, content, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            element.innerHTML += `<div class="${type}">[${timestamp}] ${content}</div>`;
+        }
+        
+        function logPre(elementId, content, label = '') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            element.innerHTML += `<div>[${timestamp}] ${label}</div><pre>${content}</pre>`;
+        }
+        
+        async function testStatsAPI() {
+            const resultDiv = document.getElementById('statsResult');
+            resultDiv.innerHTML = '<div class="info">正在测试归档统计API...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/archive/stats`);
+                
+                log('statsResult', `HTTP状态: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    logPre('statsResult', JSON.stringify(data, null, 2), '响应数据:');
+                    
+                    // 分析undefined问题
+                    const analysis = analyzeData(data, 'stats');
+                    if (analysis.length > 0) {
+                        log('statsResult', 'Found issues:', 'warning');
+                        analysis.forEach(issue => log('statsResult', issue, 'error'));
+                    } else {
+                        log('statsResult', '✅ 数据格式正常，无undefined值', 'success');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    log('statsResult', `错误响应: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                log('statsResult', `请求失败: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testLogsAPI() {
+            const resultDiv = document.getElementById('logsResult');
+            resultDiv.innerHTML = '<div class="info">正在测试归档日志API...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/archive/logs`);
+                
+                log('logsResult', `HTTP状态: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    logPre('logsResult', JSON.stringify(data, null, 2), '响应数据:');
+                    
+                    // 分析undefined问题
+                    const analysis = analyzeData(data, 'logs');
+                    if (analysis.length > 0) {
+                        log('logsResult', 'Found issues:', 'warning');
+                        analysis.forEach(issue => log('logsResult', issue, 'error'));
+                    } else {
+                        log('logsResult', '✅ 数据格式正常，无undefined值', 'success');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    log('logsResult', `错误响应: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                log('logsResult', `请求失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function analyzeData(data, type) {
+            const issues = [];
+            
+            function checkValue(obj, path = '') {
+                if (obj === undefined) {
+                    issues.push(`❌ undefined值在路径: ${path}`);
+                } else if (obj === null) {
+                    issues.push(`⚠️ null值在路径: ${path}`);
+                } else if (typeof obj === 'object' && obj !== null) {
+                    if (Array.isArray(obj)) {
+                        obj.forEach((item, index) => {
+                            checkValue(item, `${path}[${index}]`);
+                        });
+                    } else {
+                        Object.keys(obj).forEach(key => {
+                            checkValue(obj[key], path ? `${path}.${key}` : key);
+                        });
+                    }
+                }
+            }
+            
+            checkValue(data);
+            return issues;
+        }
+        
+        // 页面加载时自动测试
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testStatsAPI();
+                setTimeout(testLogsAPI, 1000);
+            }, 500);
+        });
+    </script>
+</body>
+</html>
