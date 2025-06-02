@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import AlertDialog from './components/AlertDialog';
 import { useDialog } from './hooks/useDialog';
+import ArchiveViewer from './ArchiveViewer';
 
 interface ArchiveStats {
   totalStudents: number;
@@ -28,8 +29,10 @@ const ArchiveManagement: React.FC = () => {
   const [stats, setStats] = useState<ArchiveStats | null>(null);
   const [logs, setLogs] = useState<ArchiveLog[]>([]);
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
-  const [archiveReason, setArchiveReason] = useState('');  const [loading, setLoading] = useState(false);
+  const [archiveReason, setArchiveReason] = useState('');  
+  const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [viewingArchiveId, setViewingArchiveId] = useState<number | null>(null);
   
   // 使用自定义弹窗
   const { showAlert, alertState, closeAlert } = useDialog();
@@ -63,7 +66,7 @@ const ArchiveManagement: React.FC = () => {
       const response = await fetch('/api/admin/archive/logs');
       if (response.ok) {
         const data = await response.json();
-        const safeLogs = (data.logs || []).map(log => ({
+        const safeLogs = (data.logs || []).map((log: any) => ({
           ...log,
           // 确保关键字段不为undefined
           student_count: log.student_count || 0,
@@ -128,25 +131,55 @@ const ArchiveManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-  // 下载归档文件
-  const downloadArchive = async (logId: number, fileName: string) => {
+  };  // 下载归档文件（JSON格式）
+  const downloadArchiveAsJson = async (logId: number, fileName: string) => {
     try {
       const response = await fetch(`/api/admin/archive/download/${logId}`);
       if (response.ok) {
-        const blob = await response.blob();
+        const data = await response.json();
+        const dataStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = fileName || `archive_${logId}.zip`;
+        // 使用正确的.json扩展名
+        a.download = fileName.replace('.zip', '.json') || `archive_${logId}.json`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);      } else {
+        document.body.removeChild(a);
+        showAlert('归档文件下载成功', '下载完成', 'success');
+      } else {
         showAlert('无法下载归档文件', '下载失败', 'error');
       }
     } catch (error) {
       console.error('下载归档文件失败:', error);
+      showAlert('网络错误，请稍后重试', '下载失败', 'error');
+    }
+  };
+
+  // 下载压缩归档文件（ZIP格式 - 真正节省空间）
+  const downloadArchiveAsZip = async (logId: number, fileName: string) => {
+    try {
+      const response = await fetch(`/api/admin/archive/download-zip/${logId}`);
+      if (response.ok) {
+        // 直接下载ZIP文件
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // 确保使用.zip扩展名
+        a.download = fileName.endsWith('.zip') ? fileName : fileName.replace(/\.[^/.]+$/, '') + '.zip';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        showAlert('压缩归档文件下载成功！文件已压缩，大大节省存储空间。', '下载完成', 'success');
+      } else {
+        showAlert('无法下载压缩归档文件', '下载失败', 'error');
+      }
+    } catch (error) {
+      console.error('下载压缩归档文件失败:', error);
       showAlert('网络错误，请稍后重试', '下载失败', 'error');
     }
   };
@@ -252,11 +285,11 @@ const ArchiveManagement: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontSize: 18, marginRight: 8 }}>⚠️</span>
             <strong style={{ color: '#e17055', fontSize: 16 }}>重要提醒</strong>
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 20, color: '#6c5ce7', lineHeight: 1.6 }}>
+          </div>          <ul style={{ margin: 0, paddingLeft: 20, color: '#6c5ce7', lineHeight: 1.6 }}>
             <li><strong>归档操作会永久删除</strong>所选年级的学生信息、分数记录和申请记录</li>
-            <li>删除前系统会自动备份数据到归档文件中</li>
+            <li>删除前系统会自动备份数据到<strong>压缩归档文件</strong>中，大幅节省存储空间</li>
             <li>归档后的数据将无法在系统中查看，只能通过下载归档文件查看</li>
+            <li>推荐下载<strong>ZIP压缩格式</strong>，相比JSON格式可节省70-90%的存储空间</li>
             <li>此操作<span style={{ color: '#e17055', fontWeight: 'bold' }}>不可撤销</span>，请谨慎操作</li>
           </ul>
         </div>
@@ -365,9 +398,22 @@ const ArchiveManagement: React.FC = () => {
         border: '1px solid #dee2e6'
       }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: '#495057' }}>📋 归档历史记录</h3>
-        
-        {logs.length > 0 ? (
-          <div style={{ overflowX: 'auto' }}>
+          {logs.length > 0 ? (
+          <>
+            <div style={{ 
+              marginBottom: 16, 
+              padding: 12, 
+              backgroundColor: '#e7f3ff', 
+              borderRadius: 4,
+              fontSize: 14 
+            }}>
+              💡 <strong>下载说明：</strong>
+              <span style={{ marginLeft: 8 }}>
+                <strong style={{ color: '#ff6b6b' }}>📦ZIP格式</strong> 推荐使用，可节省70-90%存储空间；
+                <strong style={{ color: '#007bff', marginLeft: 12 }}>JSON格式</strong> 便于程序处理，但文件较大。
+              </span>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8f9fa' }}>
@@ -403,33 +449,69 @@ const ArchiveManagement: React.FC = () => {
                     </td>
                     <td style={{ padding: '12px', borderBottom: '1px solid #dee2e6' }}>
                       {log.archive_reason || '未填写'}
+                    </td>                    <td style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid #dee2e6' }}>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => setViewingArchiveId(log.id)}
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: '#28a745',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontSize: 12
+                          }}
+                        >
+                          查看
+                        </button>
+                        <button
+                          onClick={() => {
+                            const gradesStr = Array.isArray(log.grades_archived) 
+                              ? log.grades_archived.join('_') 
+                              : (typeof log.grades_archived === 'string' ? log.grades_archived.replace(/,/g, '_') : 'unknown');
+                            downloadArchiveAsJson(log.id, `归档_${gradesStr}级_${log.archive_date}.json`);
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: '#007bff',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontSize: 12
+                          }}
+                        >
+                          JSON
+                        </button>
+                        <button
+                          onClick={() => {
+                            const gradesStr = Array.isArray(log.grades_archived) 
+                              ? log.grades_archived.join('_') 
+                              : (typeof log.grades_archived === 'string' ? log.grades_archived.replace(/,/g, '_') : 'unknown');
+                            downloadArchiveAsZip(log.id, `归档_${gradesStr}级_${log.archive_date}.zip`);
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: '#ff6b6b',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 'bold'
+                          }}
+                          title="推荐：ZIP压缩格式，节省存储空间"
+                        >
+                          📦ZIP
+                        </button>
+                      </div>
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid #dee2e6' }}>
-                      <button
-                        onClick={() => {
-                          const gradesStr = Array.isArray(log.grades_archived) 
-                            ? log.grades_archived.join('_') 
-                            : (typeof log.grades_archived === 'string' ? log.grades_archived.replace(/,/g, '_') : 'unknown');
-                          downloadArchive(log.id, `归档_${gradesStr}级_${log.archive_date}.zip`);
-                        }}
-                        style={{
-                          padding: '4px 8px',
-                          backgroundColor: '#007bff',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: 4,
-                          cursor: 'pointer',
-                          fontSize: 12
-                        }}
-                      >
-                        下载
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                  </tr>                ))}
               </tbody>
             </table>
           </div>
+          </>
         ) : (
           <div style={{ 
             textAlign: 'center', 
@@ -505,8 +587,7 @@ const ArchiveManagement: React.FC = () => {
             </div>          </div>
         </div>
       )}
-      
-      {/* 对话框组件 */}
+        {/* 对话框组件 */}
       <AlertDialog
         isOpen={alertState.isOpen}
         type={alertState.type}
@@ -514,6 +595,13 @@ const ArchiveManagement: React.FC = () => {
         message={alertState.message}
         onClose={closeAlert}
       />
+      
+      {/* 归档查看器 */}      {viewingArchiveId && (
+        <ArchiveViewer
+          archiveId={viewingArchiveId}
+          onClose={() => setViewingArchiveId(null)}
+        />
+      )}
     </div>
   );
 };

@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useDeviceDetection } from './hooks/useDeviceDetection';
+import MobileStudentScore from './MobileStudentScore';
 
 interface Student {
   id: string;
@@ -23,7 +25,7 @@ const StudentScore: React.FC = () => {
   const [student, setStudent] = useState<Student | null>(null);
   const [records, setRecords] = useState<ScoreRecord[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const deviceInfo = useDeviceDetection();
   useEffect(() => {
     const currentUser = localStorage.getItem('currentUser');
     if (!currentUser) {
@@ -53,6 +55,11 @@ const StudentScore: React.FC = () => {
         setLoading(false);
       });
   }, []);
+
+  // 如果是移动设备，使用移动端优化界面
+  if (deviceInfo.isMobile) {
+    return <MobileStudentScore />;
+  }
 
   if (loading) {
     return (

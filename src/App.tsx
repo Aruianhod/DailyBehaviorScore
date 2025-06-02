@@ -7,6 +7,7 @@ import TeacherHistory from './TeacherHistory';
 import TeacherViewStudents from './TeacherViewStudents';
 import TeacherChangePassword from './TeacherChangePassword';
 import StudentScore from './StudentScore';
+import { useDeviceDetection } from './hooks/useDeviceDetection';
 import './App.css';
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
   const [userType, setUserType] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [teacherPage, setTeacherPage] = useState<'menu' | 'apply' | 'history' | 'students' | 'password'>('menu');
+  const deviceInfo = useDeviceDetection();
 
   // 退出登录函数
   const handleLogout = () => {
@@ -405,9 +407,47 @@ function App() {
   if (userType === 'student') {
     return (
       <div style={{ minHeight: '100vh', background: '#f7f7f7' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', background: '#fff', boxShadow: '0 2px 8px #eee' }}>
-          <div style={{ fontWeight: 600, fontSize: 16 }}>欢迎，学生！</div>
-          <button onClick={handleLogout} style={{ fontWeight: 500, fontSize: 15, color: '#1976d2', background: 'none', border: '1px solid #1976d2', borderRadius: 6, padding: '6px 18px', marginLeft: 12, cursor: 'pointer' }}>退出登录</button>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          padding: deviceInfo.isMobile ? '12px 16px' : '16px 32px', 
+          background: '#fff', 
+          boxShadow: '0 2px 8px #eee',
+          flexWrap: deviceInfo.isMobile ? 'wrap' : 'nowrap',
+          gap: deviceInfo.isMobile ? '8px' : '0'
+        }}>
+          <div style={{ 
+            fontWeight: 600, 
+            fontSize: deviceInfo.isMobile ? 14 : 16,
+            color: '#1976d2'
+          }}>
+            📚 学生平时分查询系统
+          </div>
+          <button 
+            onClick={handleLogout} 
+            style={{ 
+              fontWeight: 500, 
+              fontSize: deviceInfo.isMobile ? 13 : 15, 
+              color: '#1976d2', 
+              background: 'none', 
+              border: '1px solid #1976d2', 
+              borderRadius: 6, 
+              padding: deviceInfo.isMobile ? '4px 12px' : '6px 18px', 
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#1976d2';
+              e.currentTarget.style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'none';
+              e.currentTarget.style.color = '#1976d2';
+            }}
+          >
+            退出登录
+          </button>
         </div>
         <StudentScore />
       </div>

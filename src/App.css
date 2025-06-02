@@ -53,3 +53,78 @@
     padding: 1em;
   }
 }
+
+/* 移动端登录页面优化样式 */
+.login-container {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.login-form input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.login-form input:focus {
+  border-color: #1976d2 !important;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+}
+
+.login-button {
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.login-button:active {
+  transform: translateY(1px);
+  background-color: #1565c0 !important;
+}
+
+.login-links a {
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  touch-action: manipulation;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 4px;
+}
+
+.login-links a:active {
+  opacity: 0.7;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .login-container {
+    padding: 16px !important;
+  }
+  
+  .login-form input {
+    font-size: 16px !important; /* 防止iOS缩放 */
+  }
+  
+  .login-form button {
+    min-height: 48px; /* 触摸友好 */
+  }
+}
+
+/* 小屏幕设备 */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 12px !important;
+  }
+  
+  .login-form {
+    gap: 12px !important;
+  }
+}
