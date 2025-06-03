@@ -110,11 +110,10 @@ app.post('/api/admin/import', (req, res) => {
   // 先插入users表
   const userValues = students.map(s => [s.id, s.id, 'student', s.name]);
   db.query('INSERT IGNORE INTO users (username, password, user_type, name) VALUES ?', [userValues], err => {
-    if (err) return res.status(500).json({ message: '数据库错误(users)' });
-    // 再插入students表
-    // 兼容 grade/class 字段
-    const stuValues = students.map(s => [s.id, s.name, s.grade || '', s.class || '', 100]);
-    db.query('INSERT IGNORE INTO students (student_id, name, grade, class, score) VALUES ?', [stuValues], err2 => {
+    if (err) return res.status(500).json({ message: '数据库错误(users)' });    // 再插入students表
+    // 兼容 grade/class 字段，并确保status为active
+    const stuValues = students.map(s => [s.id, s.name, s.grade || '', s.class || '', 100, 'active']);
+    db.query('INSERT INTO students (student_id, name, grade, class, score, status) VALUES ? ON DUPLICATE KEY UPDATE name=VALUES(name), grade=VALUES(grade), class=VALUES(class), score=VALUES(score), status=VALUES(status)', [stuValues], err2 => {
       if (err2) return res.status(500).json({ message: '数据库错误(students)' });
       res.json({ message: '导入成功', students });
     });
@@ -142,10 +141,9 @@ app.post('/api/admin/import-excel', upload.single('file'), (req, res) => {
     // 先插入users表
     const userValues = students.map(s => [s.id, s.id, 'student', s.name]);
     db.query('INSERT IGNORE INTO users (username, password, user_type, name) VALUES ?', [userValues], err => {
-      if (err) { fs.unlinkSync(req.file.path); return res.status(500).json({ message: '数据库错误(users)' }); }
-      // 再插入students表
-      const stuValues = students.map(s => [s.id, s.name, s.grade || '', s.class || '', 100]);
-      db.query('INSERT IGNORE INTO students (student_id, name, grade, class, score) VALUES ?', [stuValues], err2 => {
+      if (err) { fs.unlinkSync(req.file.path); return res.status(500).json({ message: '数据库错误(users)' }); }      // 再插入students表
+      const stuValues = students.map(s => [s.id, s.name, s.grade || '', s.class || '', 100, 'active']);
+      db.query('INSERT INTO students (student_id, name, grade, class, score, status) VALUES ? ON DUPLICATE KEY UPDATE name=VALUES(name), grade=VALUES(grade), class=VALUES(class), score=VALUES(score), status=VALUES(status)', [stuValues], err2 => {
         fs.unlinkSync(req.file.path);
         if (err2) return res.status(500).json({ message: '数据库错误(students)' });
         res.json({ message: '导入成功', students });
