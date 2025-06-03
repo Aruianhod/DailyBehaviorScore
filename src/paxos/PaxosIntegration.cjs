@@ -14,10 +14,10 @@ class PaxosIntegration {
     this.baseURL = null;
     this.timeout = options.timeout || 5000;
     this.enabled = options.enabled !== false; // 默认启用
-    this.fallbackMode = options.fallbackMode || 'allow'; // 'allow' | 'deny'
+    this.fallbackMode = options.fallbackMode || 'deny'; // 'allow' | 'deny'，默认更安全的'deny'模式
     this.client = null;
     
-    console.log(`[PaxosIntegration] 初始化完成 - 默认端口: ${this.defaultPort}, 启用状态: ${this.enabled}`);
+    console.log(`[PaxosIntegration] 初始化完成 - 默认端口: ${this.defaultPort}, 启用状态: ${this.enabled}, 降级策略: ${this.fallbackMode}`);
   }
   /**
    * 自动发现Paxos服务端口并初始化客户端
@@ -136,6 +136,17 @@ class PaxosIntegration {
       const response = await this.client.post('/consistency/score-change', scoreChangeData);
       
       if (response.data.success) {
+        // 检查是否有冲突
+        if (response.data.data.conflict) {
+          return {
+            allowed: false, // 冲突时始终拒绝，不考虑fallbackMode
+            reason: `检测到冲突: ${response.data.data.conflictDetails?.message || '操作冲突'}`,
+            conflict: true,
+            conflictDetails: response.data.data.conflictDetails,
+            operationId: response.data.data.operationId
+          };
+        }
+        
         return {
           allowed: true,
           operationId: response.data.data.operationId,
@@ -182,6 +193,17 @@ class PaxosIntegration {
       const response = await this.client.post('/consistency/application-review', reviewData);
       
       if (response.data.success) {
+        // 检查是否有冲突
+        if (response.data.data.conflict) {
+          return {
+            allowed: false, // 冲突时始终拒绝，不考虑fallbackMode
+            reason: `检测到冲突: ${response.data.data.conflictDetails?.message || '操作冲突'}`,
+            conflict: true,
+            conflictDetails: response.data.data.conflictDetails,
+            operationId: response.data.data.operationId
+          };
+        }
+        
         return {
           allowed: true,
           operationId: response.data.data.operationId,
@@ -228,6 +250,17 @@ class PaxosIntegration {
       const response = await this.client.post('/consistency/archive', archiveData);
       
       if (response.data.success) {
+        // 检查是否有冲突
+        if (response.data.data.conflict) {
+          return {
+            allowed: false, // 冲突时始终拒绝，不考虑fallbackMode
+            reason: `检测到冲突: ${response.data.data.conflictDetails?.message || '操作冲突'}`,
+            conflict: true,
+            conflictDetails: response.data.data.conflictDetails,
+            operationId: response.data.data.operationId
+          };
+        }
+        
         return {
           allowed: true,
           operationId: response.data.data.operationId,

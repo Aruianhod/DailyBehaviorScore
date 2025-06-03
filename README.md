@@ -207,6 +207,31 @@ node test/comprehensive_on_demand_test.cjs
 - **SQL注入防护**：使用参数化查询
 - **输入过滤**：用户输入安全过滤
 
+## 🧪 测试说明
+
+### 核心测试文件
+- **`test/comprehensive_system_test.cjs`** - 完整系统功能测试
+- **`test/check_db_structure.cjs`** - 数据库结构验证
+- **`simple_conflict_test.cjs`** - Paxos基础冲突测试
+- **`extreme_conflict_test_fixed.cjs`** - 极端并发测试
+- **`fallback_mode_conflict_test.cjs`** - 降级模式测试
+
+### 运行测试
+```bash
+# 完整系统测试
+node test/comprehensive_system_test.cjs
+
+# 数据库结构检查
+node test/check_db_structure.cjs
+
+# Paxos一致性测试
+node simple_conflict_test.cjs
+node extreme_conflict_test_fixed.cjs
+node fallback_mode_conflict_test.cjs
+```
+
+详细的测试文档请参考 [`test/README.md`](test/README.md)。
+
 ## 📝 更新日志
 
 ### v1.0.0 (2024-06-01)

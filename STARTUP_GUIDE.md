@@ -1,6 +1,33 @@
 # 日常行为分管理系统 - 启动指南
 
-## 🚀 快速启动步骤
+## 🚀 一键启动（推荐）
+
+### 方式1: 快速启动
+```bash
+# Windows - 双击运行或命令行执行
+quick_start.bat
+
+# Linux/macOS
+chmod +x quick_start.sh
+./quick_start.sh
+```
+
+### 方式2: 完整启动菜单
+```bash
+# Windows - 提供多种启动选项
+start_all_services.bat
+
+# Linux/macOS  
+chmod +x start_all_services.sh
+./start_all_services.sh
+```
+
+## 📋 服务信息
+- **Paxos服务**: http://localhost:3002 (自动端口切换)
+- **后端服务**: http://localhost:3000
+- **前端服务**: http://localhost:5173
+
+## 🔧 手动启动步骤
 
 ### 1. 数据库初始化
 ```bash

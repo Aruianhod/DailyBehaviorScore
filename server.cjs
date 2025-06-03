@@ -23,7 +23,7 @@ async function initializePaxosService() {
       port: 3002, // 默认端口
       portSearchRange: 10, // 搜索范围
       enabled: true,
-      fallbackMode: 'allow' // 在Paxos服务不可用时允许操作
+      fallbackMode: 'deny' // 生产模式：在Paxos服务不可用时拒绝关键操作
     });
     
     console.log('🔍 正在自动发现Paxos服务...');
