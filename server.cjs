@@ -8,9 +8,69 @@ const fs = require('fs');
 const archiver = require('archiver');
 const upload = multer({ dest: 'uploads/' });
 
+// 导入Paxos一致性服务
+let paxosIntegration = null;
+
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+
+// 初始化Paxos服务的异步函数
+async function initializePaxosService() {
+  try {
+    const PaxosIntegration = require('./src/paxos/PaxosIntegration.cjs');
+    paxosIntegration = new PaxosIntegration({
+      port: 3002, // 默认端口
+      portSearchRange: 10, // 搜索范围
+      enabled: true,
+      fallbackMode: 'allow' // 在Paxos服务不可用时允许操作
+    });
+    
+    console.log('🔍 正在自动发现Paxos服务...');
+    
+    // 自动发现并连接Paxos服务
+    const discovered = await paxosIntegration.discoverAndInitialize();
+    
+    if (discovered) {
+      const portInfo = paxosIntegration.getPortInfo();
+      console.log('✅ Paxos一致性服务已连接');
+      console.log(`📡 服务地址: ${paxosIntegration.baseURL}`);
+      
+      if (portInfo.switched) {
+        console.log(`🔄 端口自动切换: ${portInfo.default} -> ${portInfo.actual}`);
+      }
+    } else {
+      console.warn('⚠️ Paxos服务不可用，使用降级模式');
+    }
+  } catch (error) {
+    console.warn('⚠️ Paxos服务初始化失败，将使用降级模式:', error.message);
+    console.log('错误详情:', error);
+    // 创建一个简单的降级服务
+    paxosIntegration = {
+      checkScoreChangeConsistency: async () => ({ allowed: true, reason: 'Paxos服务不可用' }),
+      checkApplicationReviewConsistency: async () => ({ allowed: true, reason: 'Paxos服务不可用' }),
+      checkArchiveConsistency: async () => ({ allowed: true, reason: 'Paxos服务不可用' }),
+      getServiceStatus: () => ({ status: 'disabled', message: 'Paxos服务不可用' }),
+      getPortInfo: () => ({ default: 3002, actual: null, switched: false, url: null })
+    };
+  }
+}
+
+// 一致性检查中间件
+async function consistencyCheckMiddleware(req, res, next) {
+  if (!paxosIntegration) {
+    await initializePaxosService();
+  }
+  
+  req.paxosIntegration = paxosIntegration;
+  next();
+}
+
+// 应用一致性检查中间件到需要的路由
+app.use('/api/admin/score', consistencyCheckMiddleware);
+app.use('/api/admin/applications/:id/approve', consistencyCheckMiddleware);
+app.use('/api/admin/applications/:id/reject', consistencyCheckMiddleware);
+app.use('/api/admin/archive/execute', consistencyCheckMiddleware);
 
 // 数据库连接
 const db = mysql.createConnection({
@@ -178,10 +238,35 @@ app.delete('/api/admin/students', (req, res) => {
 });
 
 // 批量分值修改接口（兼容单个和多个）
-app.post('/api/admin/score', (req, res) => {
+app.post('/api/admin/score', async (req, res) => {
   let { student_id, delta, reason, operator } = req.body;
   if (!reason || typeof delta !== 'number' || !operator) return res.status(400).json({ message: '参数错误' });
   if (!Array.isArray(student_id)) student_id = [student_id];
+
+  // Paxos一致性检查
+  try {
+    const consistencyResult = await req.paxosIntegration.checkScoreChangeConsistency({
+      studentId: student_id.join(','), // 将数组转为字符串
+      teacherId: operator,
+      change: delta,
+      reason: reason
+    });
+
+    if (!consistencyResult.allowed) {
+      console.log(`[一致性检查] 分值修改被拒绝: ${consistencyResult.reason}`);
+      return res.status(409).json({ 
+        message: `操作被拒绝: ${consistencyResult.reason}`,
+        type: 'consistency_check_failed'
+      });
+    }
+
+    console.log(`[一致性检查] 分值修改允许执行，操作ID: ${consistencyResult.operationId || 'N/A'}`);
+  } catch (error) {
+    console.error('[一致性检查] 检查过程出错:', error);
+    // 继续执行，但记录警告
+    console.warn('[一致性检查] 使用降级模式继续执行');
+  }
+
   let finished = 0, failed = 0;
   student_id.forEach(id => {
     db.query('UPDATE students SET score = score + ? WHERE student_id = ?', [delta, id], err => {
@@ -257,14 +342,37 @@ app.get('/api/admin/applications', (req, res) => {
 });
 
 // 审核通过（批量处理所有学生）
-app.post('/api/admin/applications/:id/approve', (req, res) => {
+app.post('/api/admin/applications/:id/approve', async (req, res) => {
   const id = req.params.id;
   console.log('开始审核申请:', id);
+
+  // Paxos一致性检查
+  try {
+    const consistencyResult = await req.paxosIntegration.checkApplicationReviewConsistency({
+      applicationId: id,
+      reviewerId: 'admin', // 或从req.user获取
+      action: 'approve'
+    });
+
+    if (!consistencyResult.allowed) {
+      console.log(`[一致性检查] 申请审核被拒绝: ${consistencyResult.reason}`);
+      return res.status(409).json({ 
+        message: `操作被拒绝: ${consistencyResult.reason}`,
+        type: 'consistency_check_failed'
+      });
+    }
+
+    console.log(`[一致性检查] 申请审核允许执行，操作ID: ${consistencyResult.operationId || 'N/A'}`);
+  } catch (error) {
+    console.error('[一致性检查] 检查过程出错:', error);
+    // 继续执行，但记录警告
+    console.warn('[一致性检查] 使用降级模式继续执行');
+  }
   
   db.query('SELECT * FROM score_applications WHERE id = ?', [id], (err, results) => {
     if (err) {
       console.error('查询申请失败:', err);
-      return res.status(404).json({ message: '查询申请失败: ' + err.message });
+      return res.status(404).json({ message: '查询申请失败' });
     }
     if (results.length === 0) {
       console.log('申请不存在:', id);
@@ -315,7 +423,7 @@ app.post('/api/admin/applications/:id/approve', (req, res) => {
         console.log('开始更新申请状态为已通过');        db.query('UPDATE score_applications SET status = "approved" WHERE id = ?', [id], err4 => {
           if (err4) {
             console.error('更新申请状态失败:', err4);
-            return res.status(500).json({ message: '更新申请状态失败: ' + err4.message });
+            return res.status(500).json({ message: '更新申请状态失败' });
           }
           console.log('审核完成，成功');
           if (failed) return res.json({ message: `部分失败，成功${ids.length - failed}，失败${failed}` });
@@ -327,10 +435,33 @@ app.post('/api/admin/applications/:id/approve', (req, res) => {
 });
 
 // 审核驳回
-app.post('/api/admin/applications/:id/reject', (req, res) => {
+app.post('/api/admin/applications/:id/reject', async (req, res) => {
   const id = req.params.id;
   const { reason } = req.body;
   if (!reason) return res.status(400).json({ message: '请填写驳回理由' });
+
+  // Paxos一致性检查
+  try {
+    const consistencyResult = await req.paxosIntegration.checkApplicationReviewConsistency({
+      applicationId: id,
+      reviewerId: 'admin', // 或从req.user获取
+      action: 'reject'
+    });
+
+    if (!consistencyResult.allowed) {
+      console.log(`[一致性检查] 申请驳回被拒绝: ${consistencyResult.reason}`);
+      return res.status(409).json({ 
+        message: `操作被拒绝: ${consistencyResult.reason}`,
+        type: 'consistency_check_failed'
+      });
+    }
+
+    console.log(`[一致性检查] 申请驳回允许执行，操作ID: ${consistencyResult.operationId || 'N/A'}`);
+  } catch (error) {
+    console.error('[一致性检查] 检查过程出错:', error);
+    // 继续执行，但记录警告
+    console.warn('[一致性检查] 使用降级模式继续执行');
+  }
   
   // 查找申请
   db.query('SELECT * FROM score_applications WHERE id = ?', [id], (err, results) => {
@@ -721,7 +852,7 @@ app.get('/api/admin/archive/stats', (req, res) => {
 });
 
 // 执行归档操作
-app.post('/api/admin/archive/execute', (req, res) => {
+app.post('/api/admin/archive/execute', async (req, res) => {
   const { grades, reason } = req.body;
   const createdBy = 'admin'; // 实际应用中应该从token获取
 
@@ -731,6 +862,30 @@ app.post('/api/admin/archive/execute', (req, res) => {
 
   if (!reason || reason.trim() === '') {
     return res.status(400).json({ message: '请填写归档原因' });
+  }
+
+  // Paxos一致性检查
+  try {
+    const consistencyResult = await req.paxosIntegration.checkArchiveConsistency({
+      resourceType: 'grades',
+      resourceId: grades.join(','),
+      operatorId: createdBy,
+      operation: 'archive'
+    });
+
+    if (!consistencyResult.allowed) {
+      console.log(`[一致性检查] 归档操作被拒绝: ${consistencyResult.reason}`);
+      return res.status(409).json({ 
+        message: `操作被拒绝: ${consistencyResult.reason}`,
+        type: 'consistency_check_failed'
+      });
+    }
+
+    console.log(`[一致性检查] 归档操作允许执行，操作ID: ${consistencyResult.operationId || 'N/A'}`);
+  } catch (error) {
+    console.error('[一致性检查] 检查过程出错:', error);
+    // 继续执行，但记录警告
+    console.warn('[一致性检查] 使用降级模式继续执行');
   }
 
   const gradeList = grades.map(g => `'${g}'`).join(',');
@@ -1326,6 +1481,9 @@ app.post('/api/teacher/change-password', (req, res) => {
   );
 });
 
-app.listen(3000, '0.0.0.0', () => {
+app.listen(3000, '0.0.0.0', async () => {
   console.log('服务器已启动，端口：3000，监听所有网络接口');
+  
+  // 初始化Paxos一致性服务
+  await initializePaxosService();
 });
