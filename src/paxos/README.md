@@ -14,26 +14,32 @@ npm install express cors axios
 
 ### 2. 启动服务
 
+#### 推荐方式 - 使用简单启动脚本
+```bash
+node startSimplePaxos.cjs
+```
+
 #### Windows用户
 ```cmd
-start_paxos.bat
+start_paxos_enhanced.bat
 ```
 
 #### Linux/macOS用户
 ```bash
-chmod +x start_paxos.sh
-./start_paxos.sh
-```
-
-#### 或者直接使用Node.js
-```bash
-node startPaxosService.js
+chmod +x start_paxos_enhanced.sh
+./start_paxos_enhanced.sh
 ```
 
 ### 3. 验证服务
 
+启动服务后，可以通过以下方式验证：
+
 ```bash
-node testPaxosService.js
+# 健康检查
+curl http://localhost:3002/health
+
+# 端口测试
+node quick_port_test.cjs
 ```
 
 ## 📋 服务配置
@@ -48,14 +54,15 @@ node testPaxosService.js
 
 ### 示例
 ```bash
-# 使用默认设置启动
-node startPaxosService.js
+# 使用默认设置启动（推荐方式）
+node startSimplePaxos.cjs
 
-# 指定端口和节点ID
-node startPaxosService.js --port 3003 --node-id admin_node_1
+# 使用增强启动脚本
+start_paxos_enhanced.bat  # Windows
+./start_paxos_enhanced.sh # Linux/macOS
 
-# 指定多个节点
-node startPaxosService.js --nodes admin_node_1,admin_node_2,backup_node
+# 端口测试
+node quick_port_test.cjs
 ```
 
 ## 🔧 API接口
@@ -127,19 +134,18 @@ POST /sync
 
 ### JavaScript客户端
 ```javascript
-const { PaxosClient } = require('./PaxosClient');
-
-const client = new PaxosClient('http://localhost:3002');
+// 通过主服务器的Paxos集成模块使用
+const axios = require('axios');
 
 // 检查分值修改一致性
-const result = await client.checkScoreChangeConsistency({
+const result = await axios.post('http://localhost:3002/consistency/score-change', {
   studentIds: ['2025000001'],
   delta: -5,
   reason: '迟到扣分',
   operator: 'teacher1'
 });
 
-if (result.success && result.data.result.allowed) {
+if (result.data.success && result.data.result.allowed) {
   console.log('操作允许执行');
 } else {
   console.log('操作被阻止:', result.data.result.conflicts);
@@ -166,11 +172,12 @@ curl -X POST http://localhost:3002/consistency/score-change \
 
 ### 核心组件
 
-1. **PaxosNode.ts** - Paxos协议核心实现
-2. **PaxosManager.ts** - Paxos网络管理器
-3. **PaxosService.js** - Express服务器
-4. **PaxosClient.js** - 客户端SDK
-5. **config.js** - 配置管理
+1. **DistributedConsistencyService.cjs** - 分布式一致性服务核心
+2. **PaxosManager.cjs** - Paxos协议管理器
+3. **PaxosService.cjs** - Express HTTP服务器
+4. **PaxosIntegration.cjs** - 主服务器集成模块
+5. **startSimplePaxos.cjs** - 简单启动脚本
+6. **utils/portUtils.cjs** - 端口工具模块
 
 ### 一致性检测流程
 
@@ -231,7 +238,14 @@ curl -X POST http://localhost:3002/consistency/score-change \
 
 ### 调试模式
 ```bash
-node startPaxosService.js --log-level debug
+# 启动简单Paxos服务进行调试
+node startSimplePaxos.cjs
+
+# 端口连通性测试
+node quick_port_test.cjs
+
+# 查看服务状态
+curl http://localhost:3002/health
 ```
 
 ## 🔒 安全考虑
@@ -262,4 +276,27 @@ node startPaxosService.js --log-level debug
 
 ## 📞 支持
 
-如有问题或建议，请查看日志输出或运行测试脚本进行诊断。
+### 最新更新 (2025年6月3日)
+本版本已经过重大清理优化：
+- 移除了重复和过时的文件
+- 保留了核心功能组件
+- 简化了启动流程
+- 提供了更稳定的服务
+
+### 当前文件结构
+```
+src/paxos/
+├── DistributedConsistencyService.cjs  # 分布式一致性服务核心
+├── PaxosIntegration.cjs              # 主服务器集成模块
+├── PaxosManager.cjs                  # Paxos协议管理器
+├── PaxosService.cjs                  # HTTP服务器
+├── startSimplePaxos.cjs              # 主要启动脚本
+├── quick_port_test.cjs               # 端口测试工具
+├── start_paxos_enhanced.bat          # Windows增强启动脚本
+├── start_paxos_enhanced.sh           # Linux/macOS增强启动脚本
+├── README.md                         # 本说明文档
+└── utils/
+    └── portUtils.cjs                 # 端口工具模块
+```
+
+如有问题或建议，请查看日志输出或运行健康检查进行诊断。
