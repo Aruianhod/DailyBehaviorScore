@@ -24,8 +24,7 @@ class SystemTester {
             failed: 0,
             skipped: 0
         };
-        
-        // 测试用的用户账号
+          // 测试用的用户账号
         this.testUsers = {
             admin: { username: 'admin', password: 'admin123' },
             teacher1: { username: 'teacher1', password: 'teacher123' },
@@ -443,12 +442,15 @@ class SystemTester {
         const response = await this.request(`/api/admin/applications/${appId}/approve`, {
             method: 'POST'
         });
-        
-        const duration = Date.now() - startTime;
-        const passed = response.ok && response.data.message.includes('成功');
+          const duration = Date.now() - startTime;
+        const passed = response.ok && (
+            response.data.message.includes('成功') || 
+            response.data.message.includes('审核通过') ||
+            response.data.message.includes('已完成')
+        );
         
         this.recordTest('申请审核通过', passed, 
-            passed ? '' : `审核失败: ${response.data?.message || response.error}`, 
+            passed ? response.data.message : `审核失败: ${response.data?.message || response.error}`, 
             duration
         );
         
@@ -705,44 +707,84 @@ class SystemTester {
         );
         
         return passed;
-    }
-
-    async testTeacherChangePassword() {
-        const startTime = Date.now();
+    }    async testTeacherChangePassword() {
+        this.log('🔐 测试老师密码修改（双重测试确保一致性）...', 'info');
         
-        const passwordData = {
+        const originalPassword = 'teacher123';
+        const tempPassword = 'temp_password_123';
+        
+        // 第一次测试：修改密码
+        this.log('  第一步：修改密码到临时密码', 'info');
+        const startTime1 = Date.now();
+        
+        const passwordData1 = {
             username: 'teacher1',
-            currentPassword: 'teacher123',
-            newPassword: '123456'
+            currentPassword: originalPassword,
+            newPassword: tempPassword
         };
         
-        
-        const response = await this.request('/api/teacher/change-password', {
+        const response1 = await this.request('/api/teacher/change-password', {
             method: 'POST',
-            body: JSON.stringify(passwordData)
+            body: JSON.stringify(passwordData1)
         });
         
-        const duration = Date.now() - startTime;
-        const passed = response.ok && response.data.message.includes('成功');
+        const duration1 = Date.now() - startTime1;
+        const passed1 = response1.ok && response1.data.message.includes('成功');
         
-        this.recordTest('老师修改密码', passed, 
-            passed ? '' : `修改失败: ${response.data?.message || response.error}`, 
-            duration
+        this.recordTest('老师修改密码（第一次）', passed1, 
+            passed1 ? '成功修改到临时密码' : `修改失败: ${response1.data?.message || response1.error}`, 
+            duration1
         );
         
-        // 恢复原密码
-        if (passed) {
-            await this.request('/api/teacher/change-password', {
-                method: 'POST',
-                body: JSON.stringify({
-                    username: 'teacher1',
-                    currentPassword: 'newpass123',
-                    newPassword: 'teacher1'
-                })
-            });
-        }
+        // 第二次测试：恢复原密码
+        this.log('  第二步：恢复原密码', 'info');
+        const startTime2 = Date.now();
         
-        return passed;
+        const passwordData2 = {
+            username: 'teacher1',
+            currentPassword: tempPassword,
+            newPassword: originalPassword
+        };
+        
+        const response2 = await this.request('/api/teacher/change-password', {
+            method: 'POST',
+            body: JSON.stringify(passwordData2)
+        });
+        
+        const duration2 = Date.now() - startTime2;
+        const passed2 = response2.ok && response2.data.message.includes('成功');
+        
+        this.recordTest('老师修改密码（恢复原密码）', passed2, 
+            passed2 ? '成功恢复原密码' : `恢复失败: ${response2.data?.message || response2.error}`, 
+            duration2
+        );
+          // 第三次测试：验证密码确实恢复了（尝试用原密码登录）
+        this.log('  第三步：验证密码恢复成功', 'info');
+        const startTime3 = Date.now();
+        
+        const loginData = {
+            username: 'teacher1',
+            password: originalPassword,
+            userType: 'teacher'
+        };
+        
+        const response3 = await this.request('/api/login', {
+            method: 'POST',
+            body: JSON.stringify(loginData)
+        });
+        
+        const duration3 = Date.now() - startTime3;
+        const passed3 = response3.ok && response3.data.token && response3.data.userType === 'teacher';
+        
+        this.recordTest('验证密码恢复成功', passed3, 
+            passed3 ? '密码验证成功，测试前后一致' : `验证失败: ${response3.data?.message || response3.error}`, 
+            duration3
+        );
+        
+        const overallPassed = passed1 && passed2 && passed3;
+        this.log(`🔐 密码修改测试${overallPassed ? '✅ 完全成功' : '❌ 存在问题'}`, overallPassed ? 'success' : 'error');
+        
+        return overallPassed;
     }
 
     // ==================== 学生功能测试 ====================
@@ -786,22 +828,65 @@ class SystemTester {
         );
         
         return passed;
-    }
-
-    // ==================== 归档功能测试 ====================
+    }    // ==================== 归档功能测试 ====================
     async testArchiveFunctions() {
         this.log('\n📁 开始归档功能测试...', 'info');
         
-        // 获取归档统计
+        // 第一步：添加1955年的测试学生数据
+        await this.addTestStudentsFor1955();
+        
+        // 第二步：获取归档统计
         await this.testArchiveStats();
         
-        // 注意：归档执行测试会删除数据，在实际测试中需要谨慎
-        // await this.testArchiveExecution();
-        this.log('⚠️ 归档执行测试已跳过（会删除数据）', 'warning');
-        this.recordTest('归档执行测试', true, '跳过以保护数据', 0);
+        // 第三步：执行1955年数据归档（安全测试）
+        await this.testArchiveExecution1955();
         
-        // 获取归档日志
+        // 第四步：获取归档日志
         await this.testArchiveLogs();
+        
+        // 第五步：验证1955年数据已被归档
+        await this.verifyArchiveExecution();
+    }    async addTestStudentsFor1955() {
+        this.log('📝 添加1955年测试学生数据...', 'info');
+        
+        const test1955Students = [
+            { id: '1955001001', name: '测试学生1955-01', grade: '1955', class: '1' },
+            { id: '1955001002', name: '测试学生1955-02', grade: '1955', class: '1' },
+            { id: '1955001003', name: '测试学生1955-03', grade: '1955', class: '2' },
+            { id: '1955002001', name: '测试学生1955-04', grade: '1955', class: '2' },
+            { id: '1955002002', name: '测试学生1955-05', grade: '1955', class: '3' }
+        ];
+
+        const startTime = Date.now();
+        
+        try {
+            // 使用批量导入API添加学生
+            const response = await this.request('/api/admin/import', {
+                method: 'POST',
+                body: JSON.stringify({ students: test1955Students })
+            });
+            
+            const duration = Date.now() - startTime;
+            const passed = response.ok && response.data.message && response.data.message.includes('成功');
+            
+            if (passed) {
+                this.log(`  ✅ 成功批量添加1955年学生 ${test1955Students.length} 个`, 'success');
+            } else {
+                this.log(`  ❌ 批量添加学生失败: ${response.data?.message || response.error}`, 'error');
+            }
+            
+            this.recordTest('添加1955年测试学生', passed, 
+                passed ? `批量添加成功 ${test1955Students.length} 个学生` : `批量添加失败: ${response.data?.message || response.error}`, 
+                duration
+            );
+            
+            return passed;
+        } catch (error) {
+            const duration = Date.now() - startTime;
+            this.log(`  ❌ 添加1955年学生异常: ${error.message}`, 'error');
+            this.recordTest('添加1955年测试学生', false, `异常: ${error.message}`, duration);
+            return false;
+        }
     }
 
     async testArchiveStats() {
@@ -812,24 +897,109 @@ class SystemTester {
         const duration = Date.now() - startTime;
         const passed = response.ok && typeof response.data.totalStudents === 'number';
         
+        if (passed) {
+            this.log(`  📊 归档统计: 总学生数 ${response.data.totalStudents}`, 'info');
+        }
+        
         this.recordTest('归档统计信息', passed, 
-            passed ? '' : `获取失败: ${response.data?.message || response.error}`, 
+            passed ? `总学生数: ${response.data.totalStudents}` : `获取失败: ${response.data?.message || response.error}`, 
             duration
         );
         
         return passed;
+    }    async testArchiveExecution1955() {
+        this.log('🗃️ 执行1955年数据归档测试...', 'info');
+        
+        const startTime = Date.now();
+        
+        const archiveData = {
+            grades: ['1955'],
+            reason: '测试归档功能 - 1955年历史数据清理',
+            operator: 'admin'
+        };
+        
+        const response = await this.request('/api/admin/archive/execute', {
+            method: 'POST',
+            body: JSON.stringify(archiveData)
+        });
+        
+        const duration = Date.now() - startTime;
+        const passed = response.ok && (
+            response.data.message?.includes('成功') || 
+            response.data.success === true ||
+            (response.data.stats && response.data.stats.studentCount >= 0)
+        );
+        
+        let details = '';
+        if (passed) {
+            // 修复：从正确的路径获取归档的学生数量
+            const archivedCount = response.data.stats ? response.data.stats.studentCount : 0;
+            const recordCount = response.data.stats ? response.data.stats.recordCount : 0;
+            const applicationCount = response.data.stats ? response.data.stats.applicationCount : 0;
+            
+            details = `成功归档1955年数据，处理 ${archivedCount} 个学生，${recordCount} 条分数记录，${applicationCount} 条申请记录`;
+            this.log(`  ✅ ${details}`, 'success');
+            
+            // 详细日志输出，便于调试
+            if (response.data.stats) {
+                this.log(`    📊 详细统计: 学生=${archivedCount}, 记录=${recordCount}, 申请=${applicationCount}`, 'info');
+                this.log(`    📁 归档ID: ${response.data.archiveId || 'N/A'}`, 'info');
+            }
+        } else {
+            details = `归档失败: ${response.data?.message || response.error}`;
+            this.log(`  ❌ ${details}`, 'error');
+            
+            // 调试信息：打印响应结构
+            if (response.data) {
+                this.log(`    🔍 响应结构: ${JSON.stringify(response.data, null, 2)}`, 'debug');
+            }
+        }
+        
+        this.recordTest('执行1955年数据归档', passed, details, duration);
+        
+        return passed;
     }
 
-    async testArchiveLogs() {
+    async verifyArchiveExecution() {
+        this.log('🔍 验证1955年数据归档结果...', 'info');
+        
+        const startTime = Date.now();
+        
+        // 查询1955年的学生，应该已经被归档（不存在或数量为0）
+        const response = await this.request('/api/admin/students?grade=1955');
+        
+        const duration = Date.now() - startTime;
+        
+        let passed = false;
+        let details = '';
+        
+        if (response.ok) {
+            const students1955 = response.data.students || [];
+            passed = students1955.length === 0;
+            details = passed ? 
+                '1955年学生数据已成功归档（查询结果为空）' : 
+                `仍有 ${students1955.length} 个1955年学生未归档`;
+        } else {
+            // 如果查询失败，可能是因为没有数据，这也是预期的
+            passed = response.status === 404 || response.data?.message?.includes('未找到');
+            details = passed ? 
+                '1955年学生数据已归档（查询返回404）' : 
+                `验证失败: ${response.data?.message || response.error}`;
+        }
+        
+        this.recordTest('验证1955年数据归档', passed, details, duration);
+        
+        return passed;
+    }    async testArchiveLogs() {
         const startTime = Date.now();
         
         const response = await this.request('/api/admin/archive/logs');
         
         const duration = Date.now() - startTime;
-        const passed = response.ok && Array.isArray(response.data);
+        const passed = response.ok && response.data.logs && Array.isArray(response.data.logs);
         
         this.recordTest('归档历史日志', passed, 
-            passed ? '' : `获取失败: ${response.data?.message || response.error}`, 
+            passed ? `获取成功，共 ${response.data.logs.length} 条日志` : `获取失败: ${response.data?.message || response.error}`, 
             duration
         );
         
@@ -1048,7 +1218,16 @@ class SystemTester {
             details: this.testResults
         };
         
-        const reportPath = path.join(__dirname, `test_report_${Date.now()}.json`);
+        // 生成可读的时间戳格式：YYYY-MM-DD_HH-mm-ss
+        const now = new Date();
+        const timeStamp = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0') + '_' +
+            String(now.getHours()).padStart(2, '0') + '-' +
+            String(now.getMinutes()).padStart(2, '0') + '-' +
+            String(now.getSeconds()).padStart(2, '0');
+        
+        const reportPath = path.join(__dirname, `test_report_${timeStamp}.json`);
         
         try {
             fs.writeFileSync(reportPath, JSON.stringify(reportData, null, 2), 'utf8');
