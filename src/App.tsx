@@ -35,9 +35,9 @@ function App() {
       <div style={{ position: 'relative', minHeight: '100vh', background: '#fff' }}>
         {/* 顶部栏 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', background: '#fff', boxShadow: '0 2px 8px #eee' }}>
-          <div>
+          {/*<div>
             <button onClick={() => setShowImport(true)} style={{ fontWeight: 600, fontSize: 16 }}>导入学生信息</button>
-          </div>
+          </div>*/}
           <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
             <span style={{ fontWeight: 600, fontSize: 16 }}>欢迎，管理员！</span>
             <button onClick={handleLogout} style={{ fontWeight: 500, fontSize: 15, color: '#1976d2', background: 'none', border: '1px solid #1976d2', borderRadius: 6, padding: '6px 18px', marginLeft: 12, cursor: 'pointer' }}>退出登录</button>
